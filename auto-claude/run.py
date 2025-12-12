@@ -415,6 +415,13 @@ Environment Variables:
         help="Skip automatic QA validation after build completes",
     )
 
+    # Follow-up options
+    parser.add_argument(
+        "--followup",
+        action="store_true",
+        help="Add follow-up tasks to a completed spec (extends existing implementation plan)",
+    )
+
     # Review options
     parser.add_argument(
         "--review-status",
