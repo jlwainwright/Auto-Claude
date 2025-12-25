@@ -47,7 +47,7 @@ jobs:
         run: cd auto-claude-ui && pnpm run build
 
       - name: Package macOS (Intel)
-        run: cd auto-claude-ui && pnpm run package:mac -- --arch=x64 --publish never
+        run: cd auto-claude-ui && pnpm run package:mac -- --arch=x64 -p never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
@@ -116,7 +116,7 @@ jobs:
         run: cd auto-claude-ui && pnpm run build
 
       - name: Package macOS (Apple Silicon)
-        run: cd auto-claude-ui && pnpm run package:mac -- --arch=arm64 --publish never
+        run: cd auto-claude-ui && pnpm run package:mac -- --arch=arm64 -p never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
@@ -185,7 +185,7 @@ jobs:
         run: cd auto-claude-ui && pnpm run build
 
       - name: Package Windows
-        run: cd auto-claude-ui && pnpm run package:win -- --publish never
+        run: cd auto-claude-ui && pnpm run package:win -- -p never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.WIN_CERTIFICATE }}
@@ -230,7 +230,7 @@ jobs:
         run: cd auto-claude-ui && pnpm run build
 
       - name: Package Linux
-        run: cd auto-claude-ui && pnpm run package:linux -- --publish never
+        run: cd auto-claude-ui && pnpm run package:linux -- -p never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
