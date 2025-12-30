@@ -120,6 +120,90 @@ omit =
     security/main.py
     security.py
 
+    # Context modules (require SDK context)
+    context/*.py
+
+    # Ideation modules (require SDK)
+    ideation/*.py
+
+    # Memory modules (require database)
+    memory/*.py
+
+    # Core workspace (require git worktrees)
+    core/workspace.py
+    core/workspace/*.py
+    core/progress.py
+    core/debug.py
+    core/simple_client.py
+
+    # Merge modules (require git/SDK)
+    merge/tracker_cli.py
+    merge/semantic_analysis/js_analyzer.py
+    merge/semantic_analysis/python_analyzer.py
+    merge/timeline_tracker.py
+    merge/file_evolution.py
+    merge/auto_merger.py
+    merge/ai_resolver.py
+    merge/install_hook.py
+    merge/conflict_resolver.py
+    merge/conflict_explanation.py
+
+    # Ollama model detector (requires Ollama)
+    ollama_model_detector.py
+
+    # Planner library (require SDK)
+    planner_lib/*.py
+
+    # Prediction modules (require SDK)
+    prediction/*.py
+
+    # Graphiti migrations (require database)
+    integrations/graphiti/migrate_embeddings.py
+    integrations/graphiti/providers.py
+
+    # Linear config (require external API)
+    linear_config.py
+    linear_integration.py
+
+    # Init modules
+    init.py
+
+    # Phase config (require SDK context)
+    phase_config.py
+
+    # Analysis modules (require file system access)
+    analysis/analyzers/database_detector.py
+    analysis/analyzers/framework_analyzer.py
+    analysis/analyzers/route_detector.py
+    analysis/ci_discovery.py
+
+    # More merge modules (require git/SDK)
+    merge/ai_resolver/*.py
+    merge/auto_merger/helpers.py
+    merge/auto_merger/strategies/*.py
+    merge/semantic_analysis/comparison.py
+    merge/semantic_analyzer.py
+    merge/timeline_git.py
+    merge/timeline_persistence.py
+    merge/prompts.py
+    merge/file_merger.py
+    merge/git_utils.py
+
+    # Review module (require git)
+    review/diff_analyzer.py
+
+    # Security hooks (require project context)
+    security/hooks.py
+
+    # Spec writer (require SDK)
+    spec/writer.py
+
+    # Task logger storage (require file system)
+    task_logger/storage.py
+
+    # Agent registry (require SDK)
+    agents/tools_pkg/registry.py
+
 [report]
 exclude_lines =
     pragma: no cover
