@@ -437,7 +437,6 @@ export function PRDetail({
         // Show success message
         setPostSuccess({ count: idsToPost.length, timestamp: Date.now() });
         // After posting, check for new commits (follow-up review now available)
-        // The useEffect will also trigger this when reviewResult changes from the store update
         checkForNewCommits();
       }
     } finally {
@@ -459,9 +458,6 @@ export function PRDetail({
     }
   };
 
-  // Auto-approval for clean PRs - posts LOW findings as suggestions + approval
-  // NOTE: GitHub PR comments are intentionally in English as it's the lingua franca
-  // for code reviews and GitHub's international developer community.
   const handleAutoApprove = async () => {
     if (!reviewResult) return;
     setIsPosting(true);
