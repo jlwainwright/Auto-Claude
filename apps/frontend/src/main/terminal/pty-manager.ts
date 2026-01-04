@@ -88,7 +88,7 @@ export function spawnPtyProcess(
 
   // Create a clean environment without DEBUG to prevent Claude Code from
   // enabling debug mode when the Electron app is run in development mode
-  const { DEBUG, ...cleanEnv } = process.env;
+  const { DEBUG: _DEBUG, ...cleanEnv } = process.env;
 
   return pty.spawn(shell, shellArgs, {
     name: 'xterm-256color',

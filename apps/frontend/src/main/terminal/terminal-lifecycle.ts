@@ -22,6 +22,8 @@ import { debugLog, debugError } from '../../shared/utils/debug-logger';
 export interface RestoreOptions {
   resumeClaudeSession: boolean;
   captureSessionId: (terminalId: string, projectPath: string, startTime: number) => void;
+  /** Callback triggered when a Claude session needs to be resumed */
+  onResumeNeeded?: (terminalId: string, sessionId: string) => void;
 }
 
 /**
@@ -145,12 +147,22 @@ export async function restoreTerminal(
     win.webContents.send(IPC_CHANNELS.TERMINAL_TITLE_CHANGE, session.id, session.title);
   }
 
-  // Don't restore Claude mode state - Claude Code process is killed on app restart
-  // Keep claudeSessionId so users can resume via the invoke Claude button
-  // The renderer side will show the invoke button since isClaudeMode is false
-  if (session.claudeSessionId) {
+  // Auto-resume Claude if session was in Claude mode with a session ID
+  if (options.resumeClaudeSession && session.isClaudeMode && session.claudeSessionId) {
+    terminal.isClaudeMode = true;
     terminal.claudeSessionId = session.claudeSessionId;
-    debugLog('[TerminalLifecycle] Preserved Claude session ID for resume:', session.claudeSessionId);
+    debugLog('[TerminalLifecycle] Auto-resuming Claude session:', session.claudeSessionId);
+
+    // Small delay to ensure PTY is ready before sending resume command
+    if (options.onResumeNeeded) {
+      setTimeout(() => {
+        options.onResumeNeeded!(terminal.id, session.claudeSessionId!);
+      }, 500);
+    }
+  } else if (session.claudeSessionId) {
+    // Keep session ID for manual resume (no auto-resume if not in Claude mode)
+    terminal.claudeSessionId = session.claudeSessionId;
+    debugLog('[TerminalLifecycle] Preserved Claude session ID for manual resume:', session.claudeSessionId);
   }
 
   return {

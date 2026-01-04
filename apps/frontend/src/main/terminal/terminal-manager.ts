@@ -80,6 +80,9 @@ export class TerminalManager {
             this.terminals,
             this.getWindow
           );
+        },
+        onResumeNeeded: (terminalId, sessionId) => {
+          this.resumeClaude(terminalId, sessionId);
         }
       },
       cols,
@@ -239,6 +242,9 @@ export class TerminalManager {
             this.terminals,
             this.getWindow
           );
+        },
+        onResumeNeeded: (terminalId, sessionId) => {
+          this.resumeClaude(terminalId, sessionId);
         }
       },
       cols,

@@ -1,5 +1,6 @@
-import { X, Sparkles, TerminalSquare, FolderGit, ExternalLink } from 'lucide-react';
+import { X, Sparkles, TerminalSquare, FolderGit, ExternalLink, GripVertical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import type { Task, TerminalWorktreeConfig } from '../../../shared/types';
 import type { TerminalStatus } from '../../stores/terminal-store';
 import { Button } from '../ui/button';
@@ -33,6 +34,8 @@ interface TerminalHeaderProps {
   onSelectWorktree?: (config: TerminalWorktreeConfig) => void;
   /** Callback to open worktree in IDE */
   onOpenInIDE?: () => void;
+  /** Drag handle listeners for terminal reordering */
+  dragHandleListeners?: SyntheticListenerMap;
 }
 
 export function TerminalHeader({
@@ -54,13 +57,30 @@ export function TerminalHeader({
   onCreateWorktree,
   onSelectWorktree,
   onOpenInIDE,
+  dragHandleListeners,
 }: TerminalHeaderProps) {
   const { t } = useTranslation(['terminal', 'common']);
   const backlogTasks = tasks.filter((t) => t.status === 'backlog');
 
   return (
-    <div className="electron-no-drag flex h-9 items-center justify-between border-b border-border/50 bg-card/30 px-2">
+    <div className="electron-no-drag group/header flex h-9 items-center justify-between border-b border-border/50 bg-card/30 px-2">
       <div className="flex items-center gap-2">
+        {/* Drag handle - visible on hover */}
+        {dragHandleListeners && (
+          <div
+            {...dragHandleListeners}
+            className={cn(
+              'flex items-center justify-center',
+              'w-4 h-6 -ml-1',
+              'opacity-0 group-hover/header:opacity-60',
+              'hover:opacity-100 transition-opacity',
+              'cursor-grab active:cursor-grabbing',
+              'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </div>
+        )}
         <div className={cn('h-2 w-2 rounded-full', STATUS_COLORS[status])} />
         <div className="flex items-center gap-1.5">
           <TerminalSquare className="h-3.5 w-3.5 text-muted-foreground" />
