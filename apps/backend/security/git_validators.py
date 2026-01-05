@@ -81,11 +81,73 @@ def validate_git_config(command_string: str) -> ValidationResult:
     return True, ""
 
 
+def validate_git_inline_config(tokens: list[str]) -> ValidationResult:
+    """
+    Check for blocked config keys passed via git -c flag.
+
+    Git allows inline config with: git -c key=value <command>
+    This bypasses 'git config' validation, so we must check all git commands
+    for -c flags containing blocked identity keys.
+
+    Args:
+        tokens: Parsed command tokens
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    i = 1  # Start after 'git'
+    while i < len(tokens):
+        token = tokens[i]
+
+        # Check for -c flag (can be "-c key=value" or "-c" "key=value")
+        if token == "-c":
+            # Next token should be the key=value
+            if i + 1 < len(tokens):
+                config_pair = tokens[i + 1]
+                # Extract the key from key=value
+                if "=" in config_pair:
+                    config_key = config_pair.split("=", 1)[0].lower()
+                    if config_key in BLOCKED_GIT_CONFIG_KEYS:
+                        return False, (
+                            f"BLOCKED: Cannot set git identity via -c flag\n\n"
+                            f"You attempted to use '-c {config_pair}' which sets a blocked "
+                            f"identity configuration.\n\n"
+                            f"WHY: Git identity (user.name, user.email) must inherit from the "
+                            f"user's global git configuration. Setting fake identities breaks "
+                            f"commit attribution and causes serious issues.\n\n"
+                            f"WHAT TO DO: Remove the -c flag and commit normally. "
+                            f"The repository will use the correct identity automatically."
+                        )
+                i += 2  # Skip -c and its value
+                continue
+        elif token.startswith("-c"):
+            # Handle -ckey=value format (no space)
+            config_pair = token[2:]  # Remove "-c" prefix
+            if "=" in config_pair:
+                config_key = config_pair.split("=", 1)[0].lower()
+                if config_key in BLOCKED_GIT_CONFIG_KEYS:
+                    return False, (
+                        f"BLOCKED: Cannot set git identity via -c flag\n\n"
+                        f"You attempted to use '{token}' which sets a blocked "
+                        f"identity configuration.\n\n"
+                        f"WHY: Git identity (user.name, user.email) must inherit from the "
+                        f"user's global git configuration. Setting fake identities breaks "
+                        f"commit attribution and causes serious issues.\n\n"
+                        f"WHAT TO DO: Remove the -c flag and commit normally. "
+                        f"The repository will use the correct identity automatically."
+                    )
+
+        i += 1
+
+    return True, ""
+
+
 def validate_git_command(command_string: str) -> ValidationResult:
     """
     Main git validator that checks all git security rules.
 
     Currently validates:
+    - git -c: Block identity changes via inline config on ANY git command
     - git config: Block identity changes
     - git commit: Run secret scanning
 
@@ -106,7 +168,22 @@ def validate_git_command(command_string: str) -> ValidationResult:
     if len(tokens) < 2:
         return True, ""  # Just "git" with no subcommand
 
-    subcommand = tokens[1]
+    # Check for blocked -c flags on ANY git command (security bypass prevention)
+    is_valid, error_msg = validate_git_inline_config(tokens)
+    if not is_valid:
+        return is_valid, error_msg
+
+    # Find the actual subcommand (skip global options like -c, -C, --git-dir, etc.)
+    subcommand = None
+    for token in tokens[1:]:
+        # Skip options and their values
+        if token.startswith("-"):
+            continue
+        subcommand = token
+        break
+
+    if not subcommand:
+        return True, ""  # No subcommand found
 
     # Check git config commands
     if subcommand == "config":

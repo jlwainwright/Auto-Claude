@@ -124,17 +124,37 @@ class WorktreeManager:
         return result.stdout.strip()
 
     def _run_git(
-        self, args: list[str], cwd: Path | None = None
+        self, args: list[str], cwd: Path | None = None, timeout: int = 60
     ) -> subprocess.CompletedProcess:
-        """Run a git command and return the result."""
-        return subprocess.run(
-            ["git"] + args,
-            cwd=cwd or self.project_dir,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        """Run a git command and return the result.
+
+        Args:
+            args: Git command arguments (without 'git' prefix)
+            cwd: Working directory for the command
+            timeout: Command timeout in seconds (default: 60)
+
+        Returns:
+            CompletedProcess with command results. On timeout, returns a
+            CompletedProcess with returncode=-1 and timeout error in stderr.
+        """
+        try:
+            return subprocess.run(
+                ["git"] + args,
+                cwd=cwd or self.project_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            # Return a failed result on timeout instead of raising
+            return subprocess.CompletedProcess(
+                args=["git"] + args,
+                returncode=-1,
+                stdout="",
+                stderr=f"Command timed out after {timeout} seconds",
+            )
 
     def _unstage_gitignored_files(self) -> None:
         """

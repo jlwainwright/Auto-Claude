@@ -21,10 +21,16 @@ from .types import ChangeType, SemanticChange, TaskSnapshot
 
 def detect_line_ending(content: str) -> str:
     """
-    Detect the dominant line ending style in content.
+    Detect line ending style in content using priority-based detection.
 
-    Checks for CRLF first (Windows), then CR (old Mac), defaults to LF (Unix).
-    This preserves the original file's line ending convention when rejoining lines.
+    Uses a priority order (CRLF > CR > LF) to detect the line ending style.
+    CRLF is checked first because it contains LF, so presence of any CRLF
+    indicates Windows-style endings. This approach is fast and works well
+    for files that consistently use one style.
+
+    Note: This returns the first detected style by priority, not the most
+    frequent style. For files with mixed line endings, consider normalizing
+    to a single style before processing.
 
     Args:
         content: File content to analyze

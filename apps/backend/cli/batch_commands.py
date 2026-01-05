@@ -229,6 +229,7 @@ def handle_batch_cleanup_command(project_dir: str, dry_run: bool = True) -> bool
                         cwd=project_dir,
                         capture_output=True,
                         text=True,
+                        timeout=30,
                     )
                     if result.returncode == 0:
                         print_status(f"Removed worktree: {spec_name}", "success")
@@ -238,6 +239,13 @@ def handle_batch_cleanup_command(project_dir: str, dry_run: bool = True) -> bool
                         print_status(
                             f"Removed worktree directory: {spec_name}", "success"
                         )
+                except subprocess.TimeoutExpired:
+                    # Timeout: fall back to manual removal
+                    shutil.rmtree(wt_path, ignore_errors=True)
+                    print_status(
+                        f"Worktree removal timed out, removed directory: {spec_name}",
+                        "warning",
+                    )
                 except Exception as e:
                     print_status(
                         f"Failed to remove worktree {spec_name}: {e}", "warning"

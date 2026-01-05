@@ -393,6 +393,68 @@ class TestGitCommitValidator:
         assert allowed is True
 
 
+class TestGitIdentityProtection:
+    """Tests for git identity protection (blocking -c flag bypass)."""
+
+    def test_blocks_inline_user_name(self):
+        """Blocks git -c user.name=... on any command."""
+        allowed, reason = validate_git_commit("git -c user.name=Evil commit -m 'test'")
+        assert allowed is False
+        assert "BLOCKED" in reason
+        assert "identity" in reason.lower()
+
+    def test_blocks_inline_user_email(self):
+        """Blocks git -c user.email=... on any command."""
+        allowed, reason = validate_git_commit("git -c user.email=fake@test.com commit -m 'test'")
+        assert allowed is False
+        assert "BLOCKED" in reason
+
+    def test_blocks_inline_author_name(self):
+        """Blocks git -c author.name=... on any command."""
+        allowed, reason = validate_git_commit("git -c author.name=FakeAuthor push")
+        assert allowed is False
+        assert "BLOCKED" in reason
+
+    def test_blocks_inline_committer_email(self):
+        """Blocks git -c committer.email=... on any command."""
+        allowed, reason = validate_git_commit("git -c committer.email=fake@test.com log")
+        assert allowed is False
+        assert "BLOCKED" in reason
+
+    def test_blocks_nospace_format(self):
+        """Blocks -ckey=value format (no space after -c)."""
+        allowed, reason = validate_git_commit("git -cuser.name=Evil commit -m 'test'")
+        assert allowed is False
+        assert "BLOCKED" in reason
+
+    def test_allows_non_identity_config(self):
+        """Allows -c with non-blocked config keys."""
+        allowed, reason = validate_git_commit("git -c core.autocrlf=true commit -m 'test'")
+        assert allowed is True
+
+        allowed, reason = validate_git_commit("git -c diff.algorithm=patience diff")
+        assert allowed is True
+
+    def test_allows_normal_git_commands(self):
+        """Normal git commands without -c identity flags pass."""
+        allowed, reason = validate_git_commit("git status")
+        assert allowed is True
+
+        allowed, reason = validate_git_commit("git log --oneline")
+        assert allowed is True
+
+        allowed, reason = validate_git_commit("git branch -a")
+        assert allowed is True
+
+    def test_case_insensitive_blocking(self):
+        """Blocks identity keys regardless of case."""
+        allowed, reason = validate_git_commit("git -c USER.NAME=Evil commit -m 'test'")
+        assert allowed is False
+
+        allowed, reason = validate_git_commit("git -c User.Email=fake@test.com push")
+        assert allowed is False
+
+
 # =============================================================================
 # DATABASE VALIDATOR TESTS
 # =============================================================================
