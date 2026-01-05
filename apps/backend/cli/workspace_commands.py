@@ -67,6 +67,7 @@ def _detect_default_branch(project_dir: Path) -> str:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             return env_branch
@@ -78,6 +79,7 @@ def _detect_default_branch(project_dir: Path) -> str:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             return branch

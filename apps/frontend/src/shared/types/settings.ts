@@ -212,7 +212,7 @@ export interface AgentProfile {
   // Per-phase configuration - all profiles now have this
   phaseModels?: PhaseModelConfig;
   phaseThinking?: PhaseThinkingConfig;
-  // Deprecated - kept for backwards compatibility
+  /** @deprecated Use phaseModels and phaseThinking for per-phase configuration. Will be removed in v3.0. */
   isAutoProfile?: boolean;
 }
 

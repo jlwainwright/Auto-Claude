@@ -23,9 +23,10 @@ def get_latest_commit(project_dir: Path) -> str | None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=10,
         )
         return result.stdout.strip()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
 
 
@@ -38,9 +39,10 @@ def get_commit_count(project_dir: Path) -> int:
             capture_output=True,
             text=True,
             check=True,
+            timeout=10,
         )
         return int(result.stdout.strip())
-    except (subprocess.CalledProcessError, ValueError):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
         return 0
 
 

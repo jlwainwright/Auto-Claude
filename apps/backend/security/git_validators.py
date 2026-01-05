@@ -18,6 +18,11 @@ from .validation_models import ValidationResult
 
 # Git config keys that agents must NOT modify
 # These are identity settings that should inherit from the user's global config
+#
+# NOTE: This validation covers command-line arguments (git config, git -c).
+# Environment variables (GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME,
+# GIT_COMMITTER_EMAIL) are NOT validated here as they require pre-execution
+# environment filtering, which is handled at the sandbox/hook level.
 BLOCKED_GIT_CONFIG_KEYS = {
     "user.name",
     "user.email",
