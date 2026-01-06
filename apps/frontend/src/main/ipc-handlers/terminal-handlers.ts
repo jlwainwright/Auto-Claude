@@ -327,8 +327,7 @@ export function registerTerminalHandlers(
 
         // Create a terminal and spawn interactive Claude session for /login
         // The /login command within an interactive Claude session provides full OAuth scopes
-        // (user:inference + user:profile) needed for usage monitoring, unlike setup-token
-        // which only provides user:inference scope
+        // (user:inference + user:profile) needed for usage monitoring
         const terminalId = `claude-login-${profileId}-${Date.now()}`;
         const homeDir = process.env.HOME || process.env.USERPROFILE || '/tmp';
 

@@ -24,8 +24,8 @@ const RATE_LIMIT_PATTERN = /Limit reached\s*[·•]\s*resets\s+(.+?)$/m;
  * The /login command (run within an interactive Claude session) triggers a browser
  * OAuth flow and outputs the token upon completion. Token format: sk-ant-oat01-...
  *
- * Note: This pattern also works with legacy `claude setup-token` output, though
- * /login is preferred as it provides full OAuth scopes (user:inference + user:profile).
+ * The /login command provides full OAuth scopes (user:inference + user:profile)
+ * which enables usage monitoring via the /api/oauth/usage endpoint.
  */
 const OAUTH_TOKEN_PATTERN = /(sk-ant-oat01-[A-Za-z0-9_-]+)/;
 

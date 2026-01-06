@@ -296,7 +296,7 @@ export class ClaudeProfileManager {
 
   /**
    * Set the OAuth token for a profile (encrypted storage).
-   * Used when capturing token from `claude setup-token` output.
+   * Used when capturing token from `/login` command output in an interactive Claude session.
    */
   setProfileToken(profileId: string, token: string, email?: string): boolean {
     const profile = this.getProfile(profileId);
@@ -556,7 +556,7 @@ export class ClaudeProfileManager {
       if (response.status === 403) {
         // 403 means token lacks user:profile scope (only has user:inference)
         console.warn('[ClaudeProfileManager] Token scope verification: user:profile scope MISSING');
-        console.warn('[ClaudeProfileManager] Token was likely obtained via setup-token (limited scopes)');
+        console.warn('[ClaudeProfileManager] Token may have limited scopes');
         console.warn('[ClaudeProfileManager] Re-authenticate using /login command for full scopes');
         return {
           hasProfileScope: false,
