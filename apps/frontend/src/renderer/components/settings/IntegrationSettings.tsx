@@ -500,7 +500,7 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
                               {t('integrations.manualTokenEntry')}
                             </Label>
                             <span className="text-xs text-muted-foreground">
-                              {t('integrations.runSetupToken')}
+                              {t('integrations.runLogin')}
                             </span>
                           </div>
 

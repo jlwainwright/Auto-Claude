@@ -411,7 +411,7 @@
     "authenticate": "Authenticate",
     "setActive": "Set Active",
     "manualTokenEntry": "Manual Token Entry",
-    "runSetupToken": "Run claude setup-token to get your token",
+    "runLogin": "Run claude login to get your token",
     "tokenPlaceholder": "sk-ant-oat01-...",
     "emailPlaceholder": "Email (optional, for display)",
     "saveToken": "Save Token",
