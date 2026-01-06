@@ -325,8 +325,10 @@ export function registerTerminalHandlers(
           }
         }
 
-        // Create a terminal and run claude setup-token there
-        // This is needed because claude setup-token requires TTY/raw mode
+        // Create a terminal and spawn interactive Claude session for /login
+        // The /login command within an interactive Claude session provides full OAuth scopes
+        // (user:inference + user:profile) needed for usage monitoring, unlike setup-token
+        // which only provides user:inference scope
         const terminalId = `claude-login-${profileId}-${Date.now()}`;
         const homeDir = process.env.HOME || process.env.USERPROFILE || '/tmp';
 
@@ -351,9 +353,9 @@ export function registerTerminalHandlers(
         // Wait a moment for the terminal to initialize
         await new Promise(resolve => setTimeout(resolve, 500));
 
-        // Build the login command with the profile's config dir
+        // Build the command to spawn interactive Claude session
         // Use platform-specific syntax and escaping for environment variables
-        let loginCommand: string;
+        let claudeSpawnCommand: string;
         const { command: claudeCmd, env: claudeEnv } = getClaudeCliInvocation();
         const pathPrefix = claudeEnv.PATH
           ? (process.platform === 'win32'
@@ -369,21 +371,32 @@ export function registerTerminalHandlers(
             // SECURITY: Use Windows-specific escaping for cmd.exe
             const escapedConfigDir = escapeShellArgWindows(profile.configDir);
             // Windows cmd.exe syntax: set "VAR=value" with %VAR% for expansion
-            loginCommand = `${pathPrefix}set "CLAUDE_CONFIG_DIR=${escapedConfigDir}" && echo Config dir: %CLAUDE_CONFIG_DIR% && ${shellClaudeCmd} setup-token`;
+            // Spawn interactive Claude session (no arguments)
+            claudeSpawnCommand = `${pathPrefix}set "CLAUDE_CONFIG_DIR=${escapedConfigDir}" && echo Config dir: %CLAUDE_CONFIG_DIR% && ${shellClaudeCmd}`;
           } else {
             // SECURITY: Use POSIX escaping for bash/zsh
             const escapedConfigDir = escapeShellArg(profile.configDir);
             // Unix/Mac bash/zsh syntax: export VAR=value with $VAR for expansion
-            loginCommand = `${pathPrefix}export CLAUDE_CONFIG_DIR=${escapedConfigDir} && echo "Config dir: $CLAUDE_CONFIG_DIR" && ${shellClaudeCmd} setup-token`;
+            // Spawn interactive Claude session (no arguments)
+            claudeSpawnCommand = `${pathPrefix}export CLAUDE_CONFIG_DIR=${escapedConfigDir} && echo "Config dir: $CLAUDE_CONFIG_DIR" && ${shellClaudeCmd}`;
           }
         } else {
-          loginCommand = `${pathPrefix}${shellClaudeCmd} setup-token`;
+          // Spawn interactive Claude session (no arguments)
+          claudeSpawnCommand = `${pathPrefix}${shellClaudeCmd}`;
         }
 
-        debugLog('[IPC] Sending login command to terminal:', loginCommand);
+        debugLog('[IPC] Sending Claude spawn command to terminal:', claudeSpawnCommand);
 
-        // Write the login command to the terminal
-        terminalManager.write(terminalId, `${loginCommand}\r`);
+        // Write the command to spawn interactive Claude session
+        terminalManager.write(terminalId, `${claudeSpawnCommand}\r`);
+
+        // Wait for Claude to start up before sending /login command
+        // Claude CLI needs time to initialize and display its prompt
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Send /login command to initiate OAuth flow with full scopes
+        debugLog('[IPC] Sending /login command to interactive Claude session');
+        terminalManager.write(terminalId, '/login\r');
 
         // Notify the renderer that an auth terminal was created
         // This allows the UI to display the terminal so users can see the OAuth flow
@@ -400,7 +413,7 @@ export function registerTerminalHandlers(
           success: true,
           data: {
             terminalId,
-            message: `A terminal has been opened to authenticate "${profile.name}". Complete the OAuth flow in your browser, then copy the token shown in the terminal.`
+            message: `A terminal has been opened to authenticate "${profile.name}". Complete the OAuth flow in your browser when prompted.`
           }
         };
       } catch (error) {
