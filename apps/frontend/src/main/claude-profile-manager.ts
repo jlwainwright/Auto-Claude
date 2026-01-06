@@ -520,6 +520,90 @@ export class ClaudeProfileManager {
   getProfilesSortedByAvailability(): ClaudeProfile[] {
     return getProfilesSortedByAvailabilityImpl(this.data.profiles);
   }
+
+  /**
+   * Verify that a token has the required scopes for full functionality.
+   * Specifically checks for `user:profile` scope needed for usage monitoring.
+   *
+   * This method tests the token by calling the OAuth usage endpoint.
+   * - 200 response: Token has `user:profile` scope
+   * - 403 response: Token lacks `user:profile` scope (only has `user:inference`)
+   * - Other errors: Network or authentication issues
+   *
+   * @param token - The decrypted OAuth token to verify
+   * @returns Promise with scope verification result
+   */
+  async verifyTokenScopes(token: string): Promise<{
+    hasProfileScope: boolean;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch('https://api.anthropic.com/api/oauth/usage', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01'
+        }
+      });
+
+      if (response.ok) {
+        // 200 response means token has user:profile scope
+        console.warn('[ClaudeProfileManager] Token scope verification: user:profile scope confirmed');
+        return { hasProfileScope: true };
+      }
+
+      if (response.status === 403) {
+        // 403 means token lacks user:profile scope (only has user:inference)
+        console.warn('[ClaudeProfileManager] Token scope verification: user:profile scope MISSING');
+        console.warn('[ClaudeProfileManager] Token was likely obtained via setup-token (limited scopes)');
+        console.warn('[ClaudeProfileManager] Re-authenticate using /login command for full scopes');
+        return {
+          hasProfileScope: false,
+          error: 'Token lacks user:profile scope. Re-authenticate using /login for usage monitoring.'
+        };
+      }
+
+      // Other HTTP errors
+      console.warn('[ClaudeProfileManager] Token scope verification failed:', response.status, response.statusText);
+      return {
+        hasProfileScope: false,
+        error: `Scope verification failed: ${response.status} ${response.statusText}`
+      };
+    } catch (error) {
+      // Network or other errors
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[ClaudeProfileManager] Token scope verification error:', errorMessage);
+      return {
+        hasProfileScope: false,
+        error: `Scope verification error: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Verify token scopes for a specific profile.
+   * Convenience wrapper that handles token decryption.
+   *
+   * @param profileId - The profile ID to verify
+   * @returns Promise with scope verification result, or error if profile/token not found
+   */
+  async verifyProfileTokenScopes(profileId: string): Promise<{
+    hasProfileScope: boolean;
+    error?: string;
+  }> {
+    const profile = this.getProfile(profileId);
+    if (!profile) {
+      return { hasProfileScope: false, error: 'Profile not found' };
+    }
+
+    const token = this.getProfileToken(profileId);
+    if (!token) {
+      return { hasProfileScope: false, error: 'No token found for profile' };
+    }
+
+    return this.verifyTokenScopes(token);
+  }
 }
 
 // Singleton instance
