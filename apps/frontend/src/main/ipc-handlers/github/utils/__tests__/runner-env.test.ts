@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockGetAPIProfileEnv = vi.fn();
 const mockGetOAuthModeClearVars = vi.fn();
 const mockGetPythonEnv = vi.fn();
+const mockGetProfileEnv = vi.fn();
 
 vi.mock('../../../../services/profile', () => ({
   getAPIProfileEnv: (...args: unknown[]) => mockGetAPIProfileEnv(...args),
@@ -18,6 +19,10 @@ vi.mock('../../../../python-env-manager', () => ({
   },
 }));
 
+vi.mock('../../../../rate-limit-detector', () => ({
+  getProfileEnv: () => mockGetProfileEnv(),
+}));
+
 import { getRunnerEnv } from '../runner-env';
 
 describe('getRunnerEnv', () => {
@@ -30,6 +35,8 @@ describe('getRunnerEnv', () => {
       PYTHONNOUSERSITE: '1',
       PYTHONPATH: '/bundled/site-packages',
     });
+    // Default mock for profile env - returns empty by default
+    mockGetProfileEnv.mockReturnValue({});
   });
 
   it('merges Python env with API profile env and OAuth clear vars', async () => {
@@ -81,5 +88,35 @@ describe('getRunnerEnv', () => {
     const result = await getRunnerEnv();
 
     expect(result.PYTHONPATH).toBe('/app/Contents/Resources/python-site-packages');
+  });
+
+  it('includes profileEnv for OAuth token (fixes #563)', async () => {
+    mockGetAPIProfileEnv.mockResolvedValue({});
+    mockGetOAuthModeClearVars.mockReturnValue({});
+    mockGetProfileEnv.mockReturnValue({
+      CLAUDE_CODE_OAUTH_TOKEN: 'oauth-token-123',
+    });
+
+    const result = await getRunnerEnv();
+
+    expect(result.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-token-123');
+  });
+
+  it('applies correct precedence order with profileEnv overriding pythonEnv', async () => {
+    mockGetPythonEnv.mockReturnValue({
+      SHARED_VAR: 'from-python',
+    });
+    mockGetAPIProfileEnv.mockResolvedValue({
+      SHARED_VAR: 'from-api-profile',
+    });
+    mockGetOAuthModeClearVars.mockReturnValue({});
+    mockGetProfileEnv.mockReturnValue({
+      SHARED_VAR: 'from-profile',
+    });
+
+    const result = await getRunnerEnv({ SHARED_VAR: 'from-extra' });
+
+    // extraEnv has highest precedence
+    expect(result.SHARED_VAR).toBe('from-extra');
   });
 });
