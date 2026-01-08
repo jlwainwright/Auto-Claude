@@ -128,6 +128,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
+          SENTRY_PROFILES_SAMPLE_RATE: ${{ secrets.SENTRY_PROFILES_SAMPLE_RATE }}
 
       - name: Notarize macOS Intel app
         env:
@@ -224,6 +227,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
+          SENTRY_PROFILES_SAMPLE_RATE: ${{ secrets.SENTRY_PROFILES_SAMPLE_RATE }}
 
       - name: Notarize macOS ARM64 app
         env:
@@ -327,6 +333,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Disable electron-builder's built-in signing (we use Azure Trusted Signing instead)
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
+          SENTRY_PROFILES_SAMPLE_RATE: ${{ secrets.SENTRY_PROFILES_SAMPLE_RATE }}
 
       - name: Azure Login (OIDC)
         if: env.AZURE_CLIENT_ID != ''
@@ -348,6 +357,32 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+
+      - name: Regenerate checksums after signing
+        if: env.AZURE_CLIENT_ID != ''
+        shell: pwsh
+        run: |
+          cd apps/frontend/dist
+          # Find the latest.yml file and update the sha512 hash for signed exe
+          $exeFile = Get-ChildItem -Filter "*.exe" | Select-Object -First 1
+          if ($exeFile) {
+            $hash = (Get-FileHash -Path $exeFile.FullName -Algorithm SHA512).Hash.ToLower()
+            $size = (Get-Item $exeFile.FullName).Length
+            $ymlFile = "latest.yml"
+            if (Test-Path $ymlFile) {
+              $content = Get-Content $ymlFile -Raw
+              # Update sha512 hash
+              $content = $content -replace 'sha512: [a-fA-F0-9]+', "sha512: $hash"
+              # Update size
+              $content = $content -replace 'size: \d+', "size: $size"
+              Set-Content -Path $ymlFile -Value $content
+              Write-Host "Updated $ymlFile with new hash: $hash and size: $size"
+            }
+          }
+
+      - name: Skip signing notice
+        if: env.AZURE_CLIENT_ID == ''
+        run: echo "::warning::Windows signing skipped - AZURE_CLIENT_ID not configured. The .exe will be unsigned."
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -427,6 +462,9 @@ jobs:
           cd apps/frontend && npm run package:linux -- --config.extraMetadata.version="$VERSION"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
+          SENTRY_PROFILES_SAMPLE_RATE: ${{ secrets.SENTRY_PROFILES_SAMPLE_RATE }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
