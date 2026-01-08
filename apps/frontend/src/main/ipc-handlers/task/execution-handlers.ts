@@ -9,6 +9,7 @@ import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
 import { checkGitStatus } from '../../project-initializer';
 import { getClaudeProfileManager } from '../../claude-profile-manager';
+import { taskUsesClaude } from '../../../shared/utils/provider';
 import {
   getPlanPath,
   persistPlanStatus,
@@ -128,15 +129,17 @@ export function registerTaskExecutionHandlers(
       }
 
       // Check authentication - Claude requires valid auth to run tasks
-      const profileManager = getClaudeProfileManager();
-      if (!profileManager.hasValidAuth()) {
-        console.warn('[TASK_START] No valid authentication for active profile');
-        mainWindow.webContents.send(
-          IPC_CHANNELS.TASK_ERROR,
-          taskId,
-          'Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account, or set an OAuth token.'
-        );
-        return;
+      if (taskUsesClaude(task.metadata)) {
+        const profileManager = getClaudeProfileManager();
+        if (!profileManager.hasValidAuth()) {
+          console.warn('[TASK_START] No valid authentication for active profile');
+          mainWindow.webContents.send(
+            IPC_CHANNELS.TASK_ERROR,
+            taskId,
+            'Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account, or set an OAuth token.'
+          );
+          return;
+        }
       }
 
       console.warn('[TASK_START] Found task:', task.specId, 'status:', task.status, 'subtasks:', task.subtasks.length);
@@ -195,7 +198,8 @@ export function registerTaskExecutionHandlers(
             workers: 1,
             baseBranch,
             useWorktree: task.metadata?.useWorktree
-          }
+          },
+          task.metadata
         );
       } else {
         // Task has subtasks, start normal execution
@@ -211,7 +215,8 @@ export function registerTaskExecutionHandlers(
             workers: 1,
             baseBranch,
             useWorktree: task.metadata?.useWorktree
-          }
+          },
+          task.metadata
         );
       }
 
@@ -545,18 +550,20 @@ export function registerTaskExecutionHandlers(
             return { success: false, error: gitStatusCheck.error || 'Git repository required' };
           }
 
-          // Check authentication before auto-starting
-          const profileManager = getClaudeProfileManager();
-          if (!profileManager.hasValidAuth()) {
-            console.warn('[TASK_UPDATE_STATUS] No valid authentication for active profile');
-            if (mainWindow) {
-              mainWindow.webContents.send(
-                IPC_CHANNELS.TASK_ERROR,
-                taskId,
-                'Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account, or set an OAuth token.'
-              );
+          // Check authentication before auto-starting (Claude only)
+          if (taskUsesClaude(task.metadata)) {
+            const profileManager = getClaudeProfileManager();
+            if (!profileManager.hasValidAuth()) {
+              console.warn('[TASK_UPDATE_STATUS] No valid authentication for active profile');
+              if (mainWindow) {
+                mainWindow.webContents.send(
+                  IPC_CHANNELS.TASK_ERROR,
+                  taskId,
+                  'Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account, or set an OAuth token.'
+                );
+              }
+              return { success: false, error: 'Claude authentication required' };
             }
-            return { success: false, error: 'Claude authentication required' };
           }
 
           console.warn('[TASK_UPDATE_STATUS] Auto-starting task:', taskId);
@@ -592,7 +599,8 @@ export function registerTaskExecutionHandlers(
                 workers: 1,
                 baseBranch: baseBranchForUpdate,
                 useWorktree: task.metadata?.useWorktree
-              }
+              },
+              task.metadata
             );
           } else {
             // Task has subtasks, start normal execution
@@ -607,7 +615,8 @@ export function registerTaskExecutionHandlers(
                 workers: 1,
                 baseBranch: baseBranchForUpdate,
                 useWorktree: task.metadata?.useWorktree
-              }
+              },
+              task.metadata
             );
           }
 
@@ -876,21 +885,23 @@ export function registerTaskExecutionHandlers(
             };
           }
 
-          // Check authentication before auto-restarting
-          const profileManager = getClaudeProfileManager();
-          if (!profileManager.hasValidAuth()) {
-            console.warn('[Recovery] Auth check failed, cannot auto-restart task');
-            // Recovery succeeded but we can't restart without auth
-            return {
-              success: true,
-              data: {
-                taskId,
-                recovered: true,
-                newStatus,
-                message: 'Task recovered but cannot restart: Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account.',
-                autoRestarted: false
-              }
-            };
+          // Check authentication before auto-restarting (Claude only)
+          if (taskUsesClaude(task.metadata)) {
+            const profileManager = getClaudeProfileManager();
+            if (!profileManager.hasValidAuth()) {
+              console.warn('[Recovery] Auth check failed, cannot auto-restart task');
+              // Recovery succeeded but we can't restart without auth
+              return {
+                success: true,
+                data: {
+                  taskId,
+                  recovered: true,
+                  newStatus,
+                  message: 'Task recovered but cannot restart: Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account.',
+                  autoRestarted: false
+                }
+              };
+            }
           }
 
           try {
@@ -945,7 +956,8 @@ export function registerTaskExecutionHandlers(
                   workers: 1,
                   baseBranch: baseBranchForRecovery,
                   useWorktree: task.metadata?.useWorktree
-                }
+                },
+                task.metadata
               );
             }
 

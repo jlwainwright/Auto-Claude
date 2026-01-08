@@ -135,8 +135,14 @@ from agents.tools_pkg import (
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from claude_agent_sdk.types import HookMatcher
 from core.auth import get_sdk_env_vars, require_auth_token
+from core.provider_config import (
+    get_openai_compat_config,
+    is_claude_provider,
+    normalize_provider,
+)
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
+from providers.openai_compat import OpenAICompatClient
 from security import bash_security_hook
 
 
@@ -438,11 +444,12 @@ def create_client(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None = None,
     agent_type: str = "coder",
     max_thinking_tokens: int | None = None,
     output_format: dict | None = None,
     agents: dict | None = None,
-) -> ClaudeSDKClient:
+) -> Any:
     """
     Create a Claude Agent SDK client with multi-layered security.
 
@@ -453,7 +460,8 @@ def create_client(
     Args:
         project_dir: Root directory for the project (working directory)
         spec_dir: Directory containing the spec (for settings file)
-        model: Claude model to use
+        model: Model to use
+        provider: Provider identifier (claude, zai, or other OpenAI-compatible)
         agent_type: Agent type identifier from AGENT_CONFIGS
                    (e.g., 'coder', 'planner', 'qa_reviewer', 'spec_gatherer')
         max_thinking_tokens: Token budget for extended thinking (None = disabled)
@@ -470,7 +478,7 @@ def create_client(
                See: https://platform.claude.com/docs/en/agent-sdk/subagents
 
     Returns:
-        Configured ClaudeSDKClient
+        Configured ClaudeSDKClient or OpenAICompatClient
 
     Raises:
         ValueError: If agent_type is not found in AGENT_CONFIGS
@@ -482,12 +490,16 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
-    oauth_token = require_auth_token()
-    # Ensure SDK can access it via its expected env var
-    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+    provider_id = normalize_provider(provider)
 
-    # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
-    sdk_env = get_sdk_env_vars()
+    if is_claude_provider(provider_id):
+        oauth_token = require_auth_token()
+        # Ensure SDK can access it via its expected env var
+        os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+        # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
+        sdk_env = get_sdk_env_vars()
+    else:
+        sdk_env = {}
 
     # Debug: Log git-bash path detection on Windows
     if "CLAUDE_CODE_GIT_BASH_PATH" in sdk_env:
@@ -779,6 +791,19 @@ def create_client(
     else:
         print("   - CLAUDE.md: disabled by project settings")
     print()
+
+    if not is_claude_provider(provider_id):
+        provider_cfg = get_openai_compat_config(provider_id)
+        return OpenAICompatClient(
+            model=model,
+            system_prompt=base_prompt,
+            allowed_tools=allowed_tools_list,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            api_key=provider_cfg.api_key,
+            base_url=provider_cfg.base_url,
+            max_turns=1000,
+        )
 
     # Build options dict, conditionally including output_format
     options_kwargs = {

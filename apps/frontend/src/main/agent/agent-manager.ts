@@ -11,7 +11,8 @@ import {
   TaskExecutionOptions,
   RoadmapConfig
 } from './types';
-import type { IdeationConfig } from '../../shared/types';
+import type { IdeationConfig, TaskMetadata } from '../../shared/types';
+import { taskUsesClaude } from '../../shared/utils/provider';
 
 /**
  * Main AgentManager - orchestrates agent process lifecycle
@@ -96,10 +97,12 @@ export class AgentManager extends EventEmitter {
     baseBranch?: string
   ): Promise<void> {
     // Pre-flight auth check: Verify active profile has valid authentication
-    const profileManager = getClaudeProfileManager();
-    if (!profileManager.hasValidAuth()) {
-      this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
-      return;
+    if (taskUsesClaude(metadata as TaskMetadata | undefined)) {
+      const profileManager = getClaudeProfileManager();
+      if (!profileManager.hasValidAuth()) {
+        this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
+        return;
+      }
     }
 
     const autoBuildSource = this.processManager.getAutoBuildSourcePath();
@@ -144,11 +147,17 @@ export class AgentManager extends EventEmitter {
       // Pass the spec phase model and thinking level to spec_runner
       args.push('--model', metadata.phaseModels.spec);
       args.push('--thinking-level', metadata.phaseThinking.spec);
+      if (metadata.phaseProviders?.spec) {
+        args.push('--provider', metadata.phaseProviders.spec);
+      }
     } else if (metadata?.model) {
       // Non-auto profile: use single model and thinking level
       args.push('--model', metadata.model);
       if (metadata.thinkingLevel) {
         args.push('--thinking-level', metadata.thinkingLevel);
+      }
+      if (metadata.provider) {
+        args.push('--provider', metadata.provider);
       }
     }
 
@@ -171,13 +180,16 @@ export class AgentManager extends EventEmitter {
     taskId: string,
     projectPath: string,
     specId: string,
-    options: TaskExecutionOptions = {}
+    options: TaskExecutionOptions = {},
+    metadata?: SpecCreationMetadata
   ): Promise<void> {
     // Pre-flight auth check: Verify active profile has valid authentication
-    const profileManager = getClaudeProfileManager();
-    if (!profileManager.hasValidAuth()) {
-      this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
-      return;
+    if (taskUsesClaude(metadata as TaskMetadata | undefined)) {
+      const profileManager = getClaudeProfileManager();
+      if (!profileManager.hasValidAuth()) {
+        this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
+        return;
+      }
     }
 
     const autoBuildSource = this.processManager.getAutoBuildSourcePath();
@@ -221,7 +233,7 @@ export class AgentManager extends EventEmitter {
     // which allows per-phase configuration for planner, coder, and QA phases
 
     // Store context for potential restart
-    this.storeTaskContext(taskId, projectPath, specId, options, false);
+    this.storeTaskContext(taskId, projectPath, specId, options, false, undefined, undefined, metadata);
 
     await this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'task-execution');
   }
@@ -435,7 +447,8 @@ export class AgentManager extends EventEmitter {
           taskId,
           context.projectPath,
           context.specId,
-          context.options
+          context.options,
+          context.metadata
         );
       }
     }, 500);

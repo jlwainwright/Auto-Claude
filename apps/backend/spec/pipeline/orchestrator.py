@@ -58,6 +58,7 @@ class SpecOrchestrator:
         spec_dir: Path
         | None = None,  # Use existing spec directory (for UI integration)
         model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
+        provider: str | None = None,
         thinking_level: str = "medium",  # Thinking level for extended thinking
         complexity_override: str | None = None,  # Force a specific complexity
         use_ai_assessment: bool = True,  # Use AI for complexity assessment (vs heuristics)
@@ -77,6 +78,7 @@ class SpecOrchestrator:
         self.project_dir = Path(project_dir)
         self.task_description = task_description
         self.model = model
+        self.provider = provider
         self.thinking_level = thinking_level
         self.complexity_override = complexity_override
         self.use_ai_assessment = use_ai_assessment
@@ -122,7 +124,7 @@ class SpecOrchestrator:
         if self._agent_runner is None:
             task_logger = get_task_logger(self.spec_dir)
             self._agent_runner = AgentRunner(
-                self.project_dir, self.spec_dir, self.model, task_logger
+                self.project_dir, self.spec_dir, self.model, self.provider, task_logger
             )
         return self._agent_runner
 
@@ -178,6 +180,7 @@ class SpecOrchestrator:
                 phase_name,
                 phase_output,
                 model="sonnet",
+                provider=self.provider,
                 target_words=500,
             )
 

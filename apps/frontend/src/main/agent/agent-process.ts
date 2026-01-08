@@ -665,6 +665,16 @@ export class AgentProcessManager {
     // This bridges onboarding config to backend agents
     const appSettings = (readSettingsFile() || {}) as Partial<AppSettings>;
     const memoryEnv = buildMemoryEnvVars(appSettings as AppSettings);
+    const providerEnv: Record<string, string> = {};
+    if (appSettings.globalZaiApiKey) {
+      providerEnv.ZAI_API_KEY = appSettings.globalZaiApiKey;
+    }
+    if (appSettings.globalZaiBaseUrl) {
+      providerEnv.ZAI_BASE_URL = appSettings.globalZaiBaseUrl;
+    }
+    if (appSettings.globalOpenAIApiKey) {
+      providerEnv.OPENAI_API_KEY = appSettings.globalOpenAIApiKey;
+    }
 
     // Existing env sources
     const autoBuildEnv = this.loadAutoBuildEnv();
@@ -673,6 +683,6 @@ export class AgentProcessManager {
 
     // Priority: app-wide memory -> backend .env -> project .env -> project settings
     // Later sources override earlier ones
-    return { ...memoryEnv, ...autoBuildEnv, ...projectFileEnv, ...projectSettingsEnv };
+    return { ...memoryEnv, ...providerEnv, ...autoBuildEnv, ...projectFileEnv, ...projectSettingsEnv };
   }
 }

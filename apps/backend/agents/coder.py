@@ -74,6 +74,7 @@ async def run_autonomous_agent(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None = None,
     max_iterations: int | None = None,
     verbose: bool = False,
     source_spec_dir: Path | None = None,
@@ -87,7 +88,8 @@ async def run_autonomous_agent(
     Args:
         project_dir: Root directory for the project
         spec_dir: Directory containing the spec (auto-claude/specs/001-name/)
-        model: Claude model to use
+        model: Model to use
+        provider: Provider identifier (claude, zai, or OpenAI-compatible)
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Whether to show detailed output
         source_spec_dir: Original spec directory in main project (for syncing from worktree)
@@ -259,7 +261,10 @@ async def run_autonomous_agent(
         # Get the phase-specific model and thinking level (respects task_metadata.json configuration)
         # first_run means we're in planning phase, otherwise coding phase
         current_phase = "planning" if first_run else "coding"
-        phase_model = get_phase_model(spec_dir, current_phase, model)
+        from phase_config import get_phase_provider
+
+        phase_provider = get_phase_provider(spec_dir, current_phase, provider)
+        phase_model = get_phase_model(spec_dir, current_phase, model, provider)
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
         # Create client (fresh context) with phase-specific model and thinking
@@ -268,6 +273,7 @@ async def run_autonomous_agent(
             project_dir,
             spec_dir,
             phase_model,
+            provider=phase_provider,
             agent_type="planner" if first_run else "coder",
             max_thinking_tokens=phase_thinking_budget,
         )

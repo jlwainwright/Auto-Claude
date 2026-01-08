@@ -2,7 +2,14 @@
  * Task-related types
  */
 
-import type { ThinkingLevel, PhaseModelConfig, PhaseThinkingConfig } from './settings';
+import type {
+  ThinkingLevel,
+  PhaseModelConfig,
+  PhaseThinkingConfig,
+  PhaseProviderConfig,
+  ProviderId,
+  ModelId
+} from './settings';
 import type { ExecutionPhase as ExecutionPhaseType } from '../constants/phase-protocol';
 
 export type TaskStatus = 'backlog' | 'in_progress' | 'ai_review' | 'human_review' | 'pr_created' | 'done';
@@ -141,9 +148,11 @@ export interface TaskDraft {
   profileId?: string;  // Agent profile ID ('auto', 'complex', 'balanced', 'quick', 'custom')
   model: ModelType | '';
   thinkingLevel: ThinkingLevel | '';
+  provider?: ProviderId;
   // Auto profile - per-phase configuration
   phaseModels?: PhaseModelConfig;
   phaseThinking?: PhaseThinkingConfig;
+  phaseProviders?: PhaseProviderConfig;
   images: ImageAttachment[];
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
@@ -156,7 +165,7 @@ export type TaskImpact = 'low' | 'medium' | 'high' | 'critical';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 // Re-export ThinkingLevel (defined in settings.ts) for convenience
 export type { ThinkingLevel };
-export type ModelType = 'haiku' | 'sonnet' | 'opus';
+export type ModelType = ModelId;
 export type TaskCategory =
   | 'feature'
   | 'bug_fix'
@@ -219,12 +228,14 @@ export interface TaskMetadata {
   requireReviewBeforeCoding?: boolean;  // Require human review of spec/plan before coding starts
 
   // Agent configuration (from agent profile or manual selection)
-  model?: ModelType;  // Claude model to use (haiku, sonnet, opus) - used when not auto profile
+  model?: ModelType;  // Model to use when not auto profile
   thinkingLevel?: ThinkingLevel;  // Thinking budget level (none, low, medium, high, ultrathink)
-  // Auto profile - per-phase model configuration
+  provider?: ProviderId;
+  // Auto profile - per-phase configuration
   isAutoProfile?: boolean;  // True when using Auto (Optimized) profile
   phaseModels?: PhaseModelConfig;  // Per-phase model configuration
   phaseThinking?: PhaseThinkingConfig;  // Per-phase thinking configuration
+  phaseProviders?: PhaseProviderConfig;  // Per-phase provider configuration
 
   // Git/Worktree configuration
   baseBranch?: string;  // Override base branch for this task's worktree

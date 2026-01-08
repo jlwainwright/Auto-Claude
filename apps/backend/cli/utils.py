@@ -16,6 +16,11 @@ if str(_PARENT_DIR) not in sys.path:
 
 from core.auth import get_auth_token, get_auth_token_source
 from core.dependency_validator import validate_platform_dependencies
+from core.provider_config import (
+    get_openai_compat_config,
+    is_claude_provider,
+    normalize_provider,
+)
 
 
 def import_dotenv():
@@ -148,7 +153,7 @@ def find_spec(project_dir: Path, spec_identifier: str) -> Path | None:
     return None
 
 
-def validate_environment(spec_dir: Path) -> bool:
+def validate_environment(spec_dir: Path, provider: str | None = None) -> bool:
     """
     Validate that the environment is set up correctly.
 
@@ -160,24 +165,36 @@ def validate_environment(spec_dir: Path) -> bool:
 
     valid = True
 
-    # Check for OAuth token (API keys are not supported)
-    if not get_auth_token():
-        print("Error: No OAuth token found")
-        print("\nAuto Claude requires Claude Code OAuth authentication.")
-        print("Direct API keys (ANTHROPIC_API_KEY) are not supported.")
-        print("\nTo authenticate, run:")
-        print("  claude setup-token")
-        valid = False
-    else:
-        # Show which auth source is being used
-        source = get_auth_token_source()
-        if source:
-            print(f"Auth: {source}")
+    provider_id = normalize_provider(provider)
 
-        # Show custom base URL if set
-        base_url = os.environ.get("ANTHROPIC_BASE_URL")
-        if base_url:
-            print(f"API Endpoint: {base_url}")
+    if is_claude_provider(provider_id):
+        # Check for OAuth token (API keys are not supported)
+        if not get_auth_token():
+            print("Error: No OAuth token found")
+            print("\nAuto Claude requires Claude Code OAuth authentication.")
+            print("Direct API keys (ANTHROPIC_API_KEY) are not supported.")
+            print("\nTo authenticate, run:")
+            print("  claude setup-token")
+            valid = False
+        else:
+            # Show which auth source is being used
+            source = get_auth_token_source()
+            if source:
+                print(f"Auth: {source}")
+
+            # Show custom base URL if set
+            base_url = os.environ.get("ANTHROPIC_BASE_URL")
+            if base_url:
+                print(f"API Endpoint: {base_url}")
+    else:
+        try:
+            provider_cfg = get_openai_compat_config(provider_id)
+            print(f"Provider: {provider_cfg.provider}")
+            if provider_cfg.base_url:
+                print(f"API Endpoint: {provider_cfg.base_url}")
+        except ValueError as e:
+            print(f"Error: {e}")
+            valid = False
 
     # Check for spec.md in spec directory
     spec_file = spec_dir / "spec.md"

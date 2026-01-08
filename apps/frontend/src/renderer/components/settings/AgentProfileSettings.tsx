@@ -5,14 +5,19 @@ import { cn } from '../../lib/utils';
 import {
   DEFAULT_AGENT_PROFILES,
   AVAILABLE_MODELS,
+  AVAILABLE_ZAI_MODELS,
+  AVAILABLE_PROVIDERS,
   THINKING_LEVELS,
   DEFAULT_PHASE_MODELS,
-  DEFAULT_PHASE_THINKING
+  DEFAULT_PHASE_THINKING,
+  DEFAULT_PHASE_PROVIDERS,
+  DEFAULT_ZAI_PHASE_MODELS
 } from '../../../shared/constants';
 import { useSettingsStore, saveSettings } from '../../stores/settings-store';
 import { SettingsSection } from './SettingsSection';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import {
   Select,
   SelectContent,
@@ -20,7 +25,15 @@ import {
   SelectTrigger,
   SelectValue
 } from '../ui/select';
-import type { AgentProfile, PhaseModelConfig, PhaseThinkingConfig, ModelTypeShort, ThinkingLevel } from '../../../shared/types/settings';
+import type {
+  AgentProfile,
+  PhaseModelConfig,
+  PhaseThinkingConfig,
+  PhaseProviderConfig,
+  ProviderId,
+  ModelId,
+  ThinkingLevel
+} from '../../../shared/types/settings';
 
 /**
  * Icon mapping for agent profile icons
@@ -55,24 +68,37 @@ export function AgentProfileSettings() {
   // Get profile's default phase config
   const profilePhaseModels = selectedProfile.phaseModels || DEFAULT_PHASE_MODELS;
   const profilePhaseThinking = selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING;
+  const profilePhaseProviders = selectedProfile.phaseProviders || DEFAULT_PHASE_PROVIDERS;
 
   // Get current phase config from settings (custom) or fall back to profile defaults
   const currentPhaseModels: PhaseModelConfig = settings.customPhaseModels || profilePhaseModels;
   const currentPhaseThinking: PhaseThinkingConfig = settings.customPhaseThinking || profilePhaseThinking;
+  const currentPhaseProviders: PhaseProviderConfig = settings.customPhaseProviders || profilePhaseProviders;
 
   /**
    * Check if current config differs from the selected profile's defaults
    */
   const hasCustomConfig = useMemo((): boolean => {
-    if (!settings.customPhaseModels && !settings.customPhaseThinking) {
+    if (!settings.customPhaseModels && !settings.customPhaseThinking && !settings.customPhaseProviders) {
       return false; // No custom settings, using profile defaults
     }
     return PHASE_KEYS.some(
       phase =>
         currentPhaseModels[phase] !== profilePhaseModels[phase] ||
-        currentPhaseThinking[phase] !== profilePhaseThinking[phase]
+        currentPhaseThinking[phase] !== profilePhaseThinking[phase] ||
+        currentPhaseProviders[phase] !== profilePhaseProviders[phase]
     );
-  }, [settings.customPhaseModels, settings.customPhaseThinking, currentPhaseModels, currentPhaseThinking, profilePhaseModels, profilePhaseThinking]);
+  }, [
+    settings.customPhaseModels,
+    settings.customPhaseThinking,
+    settings.customPhaseProviders,
+    currentPhaseModels,
+    currentPhaseThinking,
+    currentPhaseProviders,
+    profilePhaseModels,
+    profilePhaseThinking,
+    profilePhaseProviders
+  ]);
 
   const handleSelectProfile = async (profileId: string) => {
     const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === profileId);
@@ -83,7 +109,8 @@ export function AgentProfileSettings() {
       selectedAgentProfile: profileId,
       // Clear custom settings to use profile defaults
       customPhaseModels: undefined,
-      customPhaseThinking: undefined
+      customPhaseThinking: undefined,
+      customPhaseProviders: undefined
     });
     if (!success) {
       console.error('Failed to save agent profile selection');
@@ -91,7 +118,7 @@ export function AgentProfileSettings() {
     }
   };
 
-  const handlePhaseModelChange = async (phase: keyof PhaseModelConfig, value: ModelTypeShort) => {
+  const handlePhaseModelChange = async (phase: keyof PhaseModelConfig, value: ModelId) => {
     // Save as custom config (deviating from preset)
     const newPhaseModels = { ...currentPhaseModels, [phase]: value };
     await saveSettings({ customPhaseModels: newPhaseModels });
@@ -103,11 +130,31 @@ export function AgentProfileSettings() {
     await saveSettings({ customPhaseThinking: newPhaseThinking });
   };
 
+  const handlePhaseProviderChange = async (phase: keyof PhaseProviderConfig, value: ProviderId) => {
+    const newPhaseProviders = { ...currentPhaseProviders, [phase]: value };
+    const currentModel = currentPhaseModels[phase];
+    const isClaudeModel = AVAILABLE_MODELS.some((m) => m.value === currentModel);
+    const isZaiModel = AVAILABLE_ZAI_MODELS.some((m) => m.value === currentModel);
+    const newPhaseModels = { ...currentPhaseModels };
+
+    if (value === 'zai' && !isZaiModel) {
+      newPhaseModels[phase] = DEFAULT_ZAI_PHASE_MODELS[phase];
+    } else if (value === 'claude' && !isClaudeModel) {
+      newPhaseModels[phase] = DEFAULT_PHASE_MODELS[phase];
+    }
+
+    await saveSettings({
+      customPhaseProviders: newPhaseProviders,
+      customPhaseModels: newPhaseModels
+    });
+  };
+
   const handleResetToProfileDefaults = async () => {
     // Reset to the selected profile's defaults
     await saveSettings({
       customPhaseModels: undefined,
-      customPhaseThinking: undefined
+      customPhaseThinking: undefined,
+      customPhaseProviders: undefined
     });
   };
 
@@ -115,7 +162,7 @@ export function AgentProfileSettings() {
    * Get human-readable model label
    */
   const getModelLabel = (modelValue: string): string => {
-    const model = AVAILABLE_MODELS.find((m) => m.value === modelValue);
+    const model = [...AVAILABLE_MODELS, ...AVAILABLE_ZAI_MODELS].find((m) => m.value === modelValue);
     return model?.label || modelValue;
   };
 
@@ -257,58 +304,97 @@ export function AgentProfileSettings() {
 
               {/* Phase Configuration Grid */}
               <div className="space-y-4">
-                {PHASE_KEYS.map((phase) => (
-                  <div key={phase} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium text-foreground">
-                        {t(`agentProfile.phases.${phase}.label`)}
-                      </Label>
-                      <span className="text-xs text-muted-foreground">
-                        {t(`agentProfile.phases.${phase}.description`)}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Model Select */}
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t('agentProfile.model')}</Label>
-                        <Select
-                          value={currentPhaseModels[phase]}
-                          onValueChange={(value) => handlePhaseModelChange(phase, value as ModelTypeShort)}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {AVAILABLE_MODELS.map((m) => (
-                              <SelectItem key={m.value} value={m.value}>
-                                {m.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                {PHASE_KEYS.map((phase) => {
+                  const phaseProvider = currentPhaseProviders[phase];
+                  const isZaiProvider = phaseProvider === 'zai';
+                  const modelOptions = isZaiProvider ? AVAILABLE_ZAI_MODELS : AVAILABLE_MODELS;
+
+                  return (
+                    <div key={phase} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium text-foreground">
+                          {t(`agentProfile.phases.${phase}.label`)}
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          {t(`agentProfile.phases.${phase}.description`)}
+                        </span>
                       </div>
-                      {/* Thinking Level Select */}
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t('agentProfile.thinkingLevel')}</Label>
-                        <Select
-                          value={currentPhaseThinking[phase]}
-                          onValueChange={(value) => handlePhaseThinkingChange(phase, value as ThinkingLevel)}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {THINKING_LEVELS.map((level) => (
-                              <SelectItem key={level.value} value={level.value}>
-                                {level.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div className="grid grid-cols-3 gap-3">
+                        {/* Provider Select */}
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">{t('agentProfile.provider')}</Label>
+                          <Select
+                            value={phaseProvider}
+                            onValueChange={(value) => handlePhaseProviderChange(phase, value as ProviderId)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder={t('agentProfile.selectProvider')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {AVAILABLE_PROVIDERS.map((providerOption) => (
+                                <SelectItem key={providerOption.value} value={providerOption.value}>
+                                  {providerOption.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Model Select / Input */}
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">{t('agentProfile.model')}</Label>
+                          {isZaiProvider ? (
+                            <div className="space-y-1">
+                              <Input
+                                value={currentPhaseModels[phase]}
+                                onChange={(e) => handlePhaseModelChange(phase, e.target.value)}
+                                placeholder="glm-4.7"
+                                className="h-9 font-mono text-sm"
+                              />
+                              <p className="text-[10px] text-muted-foreground">
+                                Suggested: {AVAILABLE_ZAI_MODELS.map((m) => m.value).join(', ')}
+                              </p>
+                            </div>
+                          ) : (
+                            <Select
+                              value={currentPhaseModels[phase]}
+                              onValueChange={(value) => handlePhaseModelChange(phase, value as ModelId)}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {modelOptions.map((m) => (
+                                  <SelectItem key={m.value} value={m.value}>
+                                    {m.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                        {/* Thinking Level Select */}
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">{t('agentProfile.thinkingLevel')}</Label>
+                          <Select
+                            value={currentPhaseThinking[phase]}
+                            onValueChange={(value) => handlePhaseThinkingChange(phase, value as ThinkingLevel)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {THINKING_LEVELS.map((level) => (
+                                <SelectItem key={level.value} value={level.value}>
+                                  {level.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Info note */}

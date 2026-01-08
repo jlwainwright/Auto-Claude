@@ -358,9 +358,11 @@
     "phaseConfiguration": "Phase Configuration",
     "phaseConfigurationDescription": "Customize model and thinking level for each phase",
     "clickToCustomize": "Click to customize",
+    "provider": "Provider",
     "model": "Model",
     "thinking": "Thinking",
     "thinkingLevel": "Thinking Level",
+    "selectProvider": "Select provider",
     "selectModel": "Select model",
     "selectThinkingLevel": "Select thinking level",
     "perPhaseOptimization": "(per-phase optimization)",
@@ -436,7 +438,11 @@
     "apiKeys": "API Keys",
     "apiKeysInfo": "Keys set here are used as defaults. Individual projects can override these in their settings.",
     "openaiKey": "OpenAI API Key",
-    "openaiKeyDescription": "Required for Graphiti memory backend (embeddings)"
+    "openaiKeyDescription": "Required for Graphiti memory backend (embeddings)",
+    "zaiKey": "Z.AI API Key",
+    "zaiKeyDescription": "Used for Z.AI (GLM) models when selected as provider",
+    "zaiBaseUrl": "Z.AI Base URL",
+    "zaiBaseUrlDescription": "Override the default Z.AI OpenAI-compatible endpoint (optional)"
   },
   "debug": {
     "title": "Debug & Logs",

@@ -10,6 +10,7 @@ summarized and passed as context to subsequent phases.
 from pathlib import Path
 
 from core.auth import require_auth_token
+from core.provider_config import is_claude_provider, normalize_provider
 from core.simple_client import create_simple_client
 
 
@@ -17,6 +18,7 @@ async def summarize_phase_output(
     phase_name: str,
     phase_output: str,
     model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
+    provider: str | None = None,
     target_words: int = 500,
 ) -> str:
     """
@@ -28,13 +30,17 @@ async def summarize_phase_output(
         phase_name: Name of the completed phase (e.g., 'discovery', 'requirements')
         phase_output: Full output content from the phase (file contents, decisions)
         model: Model to use for summarization (defaults to Sonnet for efficiency)
+        provider: Provider identifier (claude, zai, or OpenAI-compatible)
         target_words: Target summary length in words (~500-1000 recommended)
 
     Returns:
         Concise summary of key findings, decisions, and insights from the phase
     """
-    # Validate auth token
-    require_auth_token()
+    provider_id = normalize_provider(provider)
+
+    # Validate auth token for Claude only
+    if is_claude_provider(provider_id):
+        require_auth_token()
 
     # Limit input size to avoid token overflow
     max_input_chars = 15000
@@ -61,6 +67,7 @@ Be concise and use bullet points. Skip boilerplate and meta-commentary.
     client = create_simple_client(
         agent_type="spec_compaction",
         model=model,
+        provider=provider_id,
         system_prompt=(
             "You are a concise technical summarizer. Extract only the most "
             "critical information from phase outputs. Use bullet points. "

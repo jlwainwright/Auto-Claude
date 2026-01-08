@@ -34,8 +34,19 @@ import { FileAutocomplete } from './FileAutocomplete';
 import { createTask, saveDraft, loadDraft, clearDraft, isDraftEmpty } from '../stores/task-store';
 import { useProjectStore } from '../stores/project-store';
 import { cn } from '../lib/utils';
-import type { TaskCategory, TaskPriority, TaskComplexity, TaskImpact, TaskMetadata, ImageAttachment, TaskDraft, ModelType, ThinkingLevel, ReferencedFile } from '../../shared/types';
-import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
+import type {
+  TaskCategory,
+  TaskPriority,
+  TaskComplexity,
+  TaskImpact,
+  TaskMetadata,
+  ImageAttachment,
+  TaskDraft,
+  ModelType,
+  ThinkingLevel,
+  ReferencedFile
+} from '../../shared/types';
+import type { PhaseModelConfig, PhaseThinkingConfig, PhaseProviderConfig, ProviderId } from '../../shared/types/settings';
 import {
   TASK_CATEGORY_LABELS,
   TASK_PRIORITY_LABELS,
@@ -45,7 +56,8 @@ import {
   ALLOWED_IMAGE_TYPES_DISPLAY,
   DEFAULT_AGENT_PROFILES,
   DEFAULT_PHASE_MODELS,
-  DEFAULT_PHASE_THINKING
+  DEFAULT_PHASE_THINKING,
+  DEFAULT_PHASE_PROVIDERS
 } from '../../shared/constants';
 import { useSettingsStore } from '../stores/settings-store';
 
@@ -102,6 +114,9 @@ export function TaskCreationWizard({
   const [profileId, setProfileId] = useState<string>(settings.selectedAgentProfile || 'auto');
   const [model, setModel] = useState<ModelType | ''>(selectedProfile.model);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel | ''>(selectedProfile.thinkingLevel);
+  const [provider, setProvider] = useState<ProviderId>(
+    selectedProfile.phaseProviders?.spec || DEFAULT_PHASE_PROVIDERS.spec
+  );
   // Auto profile - per-phase configuration
   // Use custom settings from app settings if available, otherwise fall back to defaults
   const [phaseModels, setPhaseModels] = useState<PhaseModelConfig | undefined>(
@@ -109,6 +124,9 @@ export function TaskCreationWizard({
   );
   const [phaseThinking, setPhaseThinking] = useState<PhaseThinkingConfig | undefined>(
     settings.customPhaseThinking || selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING
+  );
+  const [phaseProviders, setPhaseProviders] = useState<PhaseProviderConfig | undefined>(
+    settings.customPhaseProviders || selectedProfile.phaseProviders || DEFAULT_PHASE_PROVIDERS
   );
 
   // Image attachments
@@ -156,8 +174,16 @@ export function TaskCreationWizard({
         setProfileId(draft.profileId || settings.selectedAgentProfile || 'auto');
         setModel(draft.model || selectedProfile.model);
         setThinkingLevel(draft.thinkingLevel || selectedProfile.thinkingLevel);
+        setProvider(
+          draft.provider ||
+            draft.phaseProviders?.spec ||
+            settings.customPhaseProviders?.spec ||
+            selectedProfile.phaseProviders?.spec ||
+            DEFAULT_PHASE_PROVIDERS.spec
+        );
         setPhaseModels(draft.phaseModels || settings.customPhaseModels || selectedProfile.phaseModels || DEFAULT_PHASE_MODELS);
         setPhaseThinking(draft.phaseThinking || settings.customPhaseThinking || selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING);
+        setPhaseProviders(draft.phaseProviders || settings.customPhaseProviders || selectedProfile.phaseProviders || DEFAULT_PHASE_PROVIDERS);
         setImages(draft.images);
         setReferencedFiles(draft.referencedFiles ?? []);
         setRequireReviewBeforeCoding(draft.requireReviewBeforeCoding ?? false);
@@ -172,11 +198,17 @@ export function TaskCreationWizard({
         setProfileId(settings.selectedAgentProfile || 'auto');
         setModel(selectedProfile.model);
         setThinkingLevel(selectedProfile.thinkingLevel);
+        setProvider(
+          settings.customPhaseProviders?.spec ||
+            selectedProfile.phaseProviders?.spec ||
+            DEFAULT_PHASE_PROVIDERS.spec
+        );
         setPhaseModels(settings.customPhaseModels || selectedProfile.phaseModels || DEFAULT_PHASE_MODELS);
         setPhaseThinking(settings.customPhaseThinking || selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING);
+        setPhaseProviders(settings.customPhaseProviders || selectedProfile.phaseProviders || DEFAULT_PHASE_PROVIDERS);
       }
     }
-  }, [open, projectId, settings.selectedAgentProfile, settings.customPhaseModels, settings.customPhaseThinking, selectedProfile.model, selectedProfile.thinkingLevel]);
+  }, [open, projectId, settings.selectedAgentProfile, settings.customPhaseModels, settings.customPhaseThinking, settings.customPhaseProviders, selectedProfile.model, selectedProfile.thinkingLevel, selectedProfile.phaseProviders]);
 
   // Fetch branches and project default branch when dialog opens
   useEffect(() => {
@@ -237,13 +269,15 @@ export function TaskCreationWizard({
     profileId,
     model,
     thinkingLevel,
+    provider,
     phaseModels,
     phaseThinking,
+    phaseProviders,
     images,
     referencedFiles,
     requireReviewBeforeCoding,
     savedAt: new Date()
-  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding]);
+  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, provider, phaseModels, phaseThinking, phaseProviders, images, referencedFiles, requireReviewBeforeCoding]);
   /**
    * Handle paste event for screenshot support
    */
@@ -626,12 +660,15 @@ export function TaskCreationWizard({
       if (impact) metadata.impact = impact;
       if (model) metadata.model = model;
       if (thinkingLevel) metadata.thinkingLevel = thinkingLevel;
-      // All profiles now support per-phase configuration
-      // isAutoProfile indicates task uses phase-specific models/thinking
-      if (phaseModels && phaseThinking) {
+      if (profileId === 'custom') {
+        if (provider) metadata.provider = provider;
+      } else if (phaseModels && phaseThinking) {
         metadata.isAutoProfile = true;
         metadata.phaseModels = phaseModels;
         metadata.phaseThinking = phaseThinking;
+        if (phaseProviders) {
+          metadata.phaseProviders = phaseProviders;
+        }
       }
       if (images.length > 0) metadata.attachedImages = images;
       if (allReferencedFiles.length > 0) metadata.referencedFiles = allReferencedFiles;
@@ -670,8 +707,14 @@ export function TaskCreationWizard({
     setProfileId(settings.selectedAgentProfile || 'auto');
     setModel(selectedProfile.model);
     setThinkingLevel(selectedProfile.thinkingLevel);
+    setProvider(
+      settings.customPhaseProviders?.spec ||
+        selectedProfile.phaseProviders?.spec ||
+        DEFAULT_PHASE_PROVIDERS.spec
+    );
     setPhaseModels(settings.customPhaseModels || selectedProfile.phaseModels || DEFAULT_PHASE_MODELS);
     setPhaseThinking(settings.customPhaseThinking || selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING);
+    setPhaseProviders(settings.customPhaseProviders || selectedProfile.phaseProviders || DEFAULT_PHASE_PROVIDERS);
     setImages([]);
     setReferencedFiles([]);
     setRequireReviewBeforeCoding(false);
@@ -894,17 +937,21 @@ export function TaskCreationWizard({
             profileId={profileId}
             model={model}
             thinkingLevel={thinkingLevel}
+            provider={provider}
             phaseModels={phaseModels}
             phaseThinking={phaseThinking}
+            phaseProviders={phaseProviders}
             onProfileChange={(newProfileId, newModel, newThinkingLevel) => {
               setProfileId(newProfileId);
               setModel(newModel);
               setThinkingLevel(newThinkingLevel);
             }}
             onModelChange={setModel}
+            onProviderChange={setProvider}
             onThinkingLevelChange={setThinkingLevel}
             onPhaseModelsChange={setPhaseModels}
             onPhaseThinkingChange={setPhaseThinking}
+            onPhaseProvidersChange={setPhaseProviders}
             disabled={isCreating}
           />
 

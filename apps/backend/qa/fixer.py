@@ -13,7 +13,7 @@ from pathlib import Path
 
 # Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
-from claude_agent_sdk import ClaudeSDKClient
+from typing import Any
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from security.tool_input_validator import get_safe_tool_input
 from task_logger import (
@@ -47,7 +47,7 @@ def load_qa_fixer_prompt() -> str:
 
 
 async def run_qa_fixer_session(
-    client: ClaudeSDKClient,
+    client: Any,
     spec_dir: Path,
     fix_session: int,
     verbose: bool = False,

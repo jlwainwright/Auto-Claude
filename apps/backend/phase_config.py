@@ -62,6 +62,25 @@ DEFAULT_PHASE_THINKING: dict[str, str] = {
     "qa": "high",
 }
 
+# Provider-specific default models
+DEFAULT_PROVIDER_PHASE_MODELS: dict[str, dict[str, str]] = {
+    "claude": DEFAULT_PHASE_MODELS,
+    "zai": {
+        "spec": "glm-4.7",
+        "planning": "glm-4.7",
+        "coding": "glm-4.7",
+        "qa": "glm-4.7",
+    },
+}
+
+# Default provider configuration (all Claude)
+DEFAULT_PHASE_PROVIDERS: dict[str, str] = {
+    "spec": "claude",
+    "planning": "claude",
+    "coding": "claude",
+    "qa": "claude",
+}
+
 
 class PhaseModelConfig(TypedDict, total=False):
     spec: str
@@ -77,20 +96,29 @@ class PhaseThinkingConfig(TypedDict, total=False):
     qa: str
 
 
+class PhaseProviderConfig(TypedDict, total=False):
+    spec: str
+    planning: str
+    coding: str
+    qa: str
+
+
 class TaskMetadataConfig(TypedDict, total=False):
     """Structure of model-related fields in task_metadata.json"""
 
     isAutoProfile: bool
     phaseModels: PhaseModelConfig
     phaseThinking: PhaseThinkingConfig
+    phaseProviders: PhaseProviderConfig
     model: str
     thinkingLevel: str
+    provider: str
 
 
 Phase = Literal["spec", "planning", "coding", "qa"]
 
 
-def resolve_model_id(model: str) -> str:
+def resolve_model_id(model: str, provider: str | None = None) -> str:
     """
     Resolve a model shorthand (haiku, sonnet, opus) to a full model ID.
     If the model is already a full ID, return it unchanged.
@@ -102,10 +130,15 @@ def resolve_model_id(model: str) -> str:
 
     Args:
         model: Model shorthand or full ID
+        provider: Provider identifier (claude, zai, or OpenAI-compatible)
 
     Returns:
-        Full Claude model ID
+        Full model ID (Claude IDs are expanded for Claude provider)
     """
+    provider_id = (provider or "claude").lower()
+    if provider_id != "claude":
+        return model
+
     # Check for environment variable override (from API Profile custom model mappings)
     if model in MODEL_ID_MAP:
         env_var_map = {
@@ -170,10 +203,44 @@ def load_task_metadata(spec_dir: Path) -> TaskMetadataConfig | None:
         return None
 
 
+def get_phase_provider(
+    spec_dir: Path,
+    phase: Phase,
+    cli_provider: str | None = None,
+) -> str:
+    """
+    Get the provider for a specific execution phase.
+
+    Priority:
+    1. CLI argument (if provided)
+    2. Phase-specific provider from task_metadata.json (if auto profile)
+    3. Single provider from task_metadata.json
+    4. Default phase provider
+    """
+    if cli_provider:
+        return cli_provider.lower()
+
+    metadata = load_task_metadata(spec_dir)
+
+    if metadata:
+        if metadata.get("isAutoProfile") and metadata.get("phaseProviders"):
+            phase_providers = metadata["phaseProviders"]
+            provider = phase_providers.get(phase)
+            if provider:
+                return provider.lower()
+
+        provider = metadata.get("provider")
+        if provider:
+            return provider.lower()
+
+    return DEFAULT_PHASE_PROVIDERS[phase]
+
+
 def get_phase_model(
     spec_dir: Path,
     phase: Phase,
     cli_model: str | None = None,
+    cli_provider: str | None = None,
 ) -> str:
     """
     Get the resolved model ID for a specific execution phase.
@@ -182,19 +249,22 @@ def get_phase_model(
     1. CLI argument (if provided)
     2. Phase-specific config from task_metadata.json (if auto profile)
     3. Single model from task_metadata.json (if not auto profile)
-    4. Default phase configuration
+    4. Default phase configuration (provider-specific)
 
     Args:
         spec_dir: Path to the spec directory
         phase: Execution phase (spec, planning, coding, qa)
         cli_model: Model from CLI argument (optional)
+        cli_provider: Provider from CLI argument (optional)
 
     Returns:
         Resolved full model ID
     """
+    provider = get_phase_provider(spec_dir, phase, cli_provider)
+
     # CLI argument takes precedence
     if cli_model:
-        return resolve_model_id(cli_model)
+        return resolve_model_id(cli_model, provider)
 
     # Load task metadata
     metadata = load_task_metadata(spec_dir)
@@ -203,15 +273,19 @@ def get_phase_model(
         # Check for auto profile with phase-specific config
         if metadata.get("isAutoProfile") and metadata.get("phaseModels"):
             phase_models = metadata["phaseModels"]
-            model = phase_models.get(phase, DEFAULT_PHASE_MODELS[phase])
-            return resolve_model_id(model)
+            default_models = DEFAULT_PROVIDER_PHASE_MODELS.get(
+                provider, DEFAULT_PHASE_MODELS
+            )
+            model = phase_models.get(phase, default_models[phase])
+            return resolve_model_id(model, provider)
 
         # Non-auto profile: use single model
         if metadata.get("model"):
-            return resolve_model_id(metadata["model"])
+            return resolve_model_id(metadata["model"], provider)
 
     # Fall back to default phase configuration
-    return resolve_model_id(DEFAULT_PHASE_MODELS[phase])
+    default_models = DEFAULT_PROVIDER_PHASE_MODELS.get(provider, DEFAULT_PHASE_MODELS)
+    return resolve_model_id(default_models[phase], provider)
 
 
 def get_phase_thinking(
@@ -281,6 +355,7 @@ def get_phase_config(
     spec_dir: Path,
     phase: Phase,
     cli_model: str | None = None,
+    cli_provider: str | None = None,
     cli_thinking: str | None = None,
 ) -> tuple[str, str, int | None]:
     """
@@ -290,12 +365,13 @@ def get_phase_config(
         spec_dir: Path to the spec directory
         phase: Execution phase (spec, planning, coding, qa)
         cli_model: Model from CLI argument (optional)
+        cli_provider: Provider from CLI argument (optional)
         cli_thinking: Thinking level from CLI argument (optional)
 
     Returns:
         Tuple of (model_id, thinking_level, thinking_budget)
     """
-    model_id = get_phase_model(spec_dir, phase, cli_model)
+    model_id = get_phase_model(spec_dir, phase, cli_model, cli_provider)
     thinking_level = get_phase_thinking(spec_dir, phase, cli_thinking)
     thinking_budget = get_thinking_budget(thinking_level)
 

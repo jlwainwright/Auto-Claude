@@ -22,21 +22,29 @@ Example usage:
 """
 
 from pathlib import Path
+from typing import Any
 
 from agents.tools_pkg import get_agent_config, get_default_thinking_level
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from core.auth import get_sdk_env_vars, require_auth_token
+from core.provider_config import (
+    get_openai_compat_config,
+    is_claude_provider,
+    normalize_provider,
+)
 from phase_config import get_thinking_budget
+from providers.openai_compat import OpenAICompatClient
 
 
 def create_simple_client(
     agent_type: str = "merge_resolver",
     model: str = "claude-haiku-4-5-20251001",
+    provider: str | None = None,
     system_prompt: str | None = None,
     cwd: Path | None = None,
     max_turns: int = 1,
     max_thinking_tokens: int | None = None,
-) -> ClaudeSDKClient:
+) -> Any:
     """
     Create a minimal Claude SDK client for single-turn utility operations.
 
@@ -51,7 +59,8 @@ def create_simple_client(
                    - "insights" - Read-only code insight extraction
                    - "batch_analysis" - Read-only batch issue analysis
                    - "batch_validation" - Read-only validation
-        model: Claude model to use (defaults to Haiku for fast/cheap operations)
+        model: Model to use (defaults to Haiku for fast/cheap operations)
+        provider: Provider identifier (claude, zai, or other OpenAI-compatible)
         system_prompt: Optional custom system prompt (for specialized tasks)
         cwd: Working directory for file operations (optional)
         max_turns: Maximum conversation turns (default: 1 for single-turn)
@@ -64,14 +73,7 @@ def create_simple_client(
     Raises:
         ValueError: If agent_type is not found in AGENT_CONFIGS
     """
-    # Get authentication
-    oauth_token = require_auth_token()
-    import os
-
-    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
-
-    # Get environment variables for SDK
-    sdk_env = get_sdk_env_vars()
+    provider_id = normalize_provider(provider)
 
     # Get agent configuration (raises ValueError if unknown type)
     config = get_agent_config(agent_type)
@@ -84,14 +86,37 @@ def create_simple_client(
         thinking_level = get_default_thinking_level(agent_type)
         max_thinking_tokens = get_thinking_budget(thinking_level)
 
-    return ClaudeSDKClient(
-        options=ClaudeAgentOptions(
-            model=model,
-            system_prompt=system_prompt,
-            allowed_tools=allowed_tools,
-            max_turns=max_turns,
-            cwd=str(cwd.resolve()) if cwd else None,
-            env=sdk_env,
-            max_thinking_tokens=max_thinking_tokens,
+    if is_claude_provider(provider_id):
+        # Get authentication
+        oauth_token = require_auth_token()
+        import os
+
+        os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+
+        # Get environment variables for SDK
+        sdk_env = get_sdk_env_vars()
+
+        return ClaudeSDKClient(
+            options=ClaudeAgentOptions(
+                model=model,
+                system_prompt=system_prompt,
+                allowed_tools=allowed_tools,
+                max_turns=max_turns,
+                cwd=str(cwd.resolve()) if cwd else None,
+                env=sdk_env,
+                max_thinking_tokens=max_thinking_tokens,
+            )
         )
+
+    provider_cfg = get_openai_compat_config(provider_id)
+    resolved_cwd = cwd.resolve() if cwd else Path.cwd().resolve()
+    return OpenAICompatClient(
+        model=model,
+        system_prompt=system_prompt or "",
+        allowed_tools=allowed_tools,
+        project_dir=resolved_cwd,
+        spec_dir=resolved_cwd,
+        api_key=provider_cfg.api_key,
+        base_url=provider_cfg.base_url,
+        max_turns=max_turns,
     )
