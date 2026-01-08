@@ -13,7 +13,13 @@ export function useClaudeLoginTerminal() {
   const addExternalTerminal = useTerminalStore((state) => state.addExternalTerminal);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onTerminalAuthCreated((info) => {
+    const onAuthCreated = window.electronAPI?.onTerminalAuthCreated;
+    if (typeof onAuthCreated !== 'function') {
+      console.warn('[useClaudeLoginTerminal] onTerminalAuthCreated is not available');
+      return;
+    }
+
+    const unsubscribe = onAuthCreated((info) => {
       // Add the terminal to the store so it becomes visible in the UI
       // This allows users to see the 'claude setup-token' output and complete the OAuth flow
       // cwd is optional and defaults to HOME or '~' in addExternalTerminal
