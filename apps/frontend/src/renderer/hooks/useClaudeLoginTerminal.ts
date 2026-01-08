@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTerminalStore } from '../stores/terminal-store';
 import { toast } from './use-toast';
@@ -11,11 +11,20 @@ import { toast } from './use-toast';
 export function useClaudeLoginTerminal() {
   const { t } = useTranslation('terminal');
   const addExternalTerminal = useTerminalStore((state) => state.addExternalTerminal);
+  const warnedRef = useRef(false);
 
   useEffect(() => {
     const onAuthCreated = window.electronAPI?.onTerminalAuthCreated;
     if (typeof onAuthCreated !== 'function') {
       console.warn('[useClaudeLoginTerminal] onTerminalAuthCreated is not available');
+      if (!warnedRef.current) {
+        warnedRef.current = true;
+        toast({
+          variant: 'destructive',
+          title: t('auth.listenerUnavailableTitle'),
+          description: t('auth.listenerUnavailableDescription')
+        });
+      }
       return;
     }
 

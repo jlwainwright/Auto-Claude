@@ -5,7 +5,9 @@
   },
   "auth": {
     "terminalTitle": "Auth: {{profileName}}",
-    "maxTerminalsReached": "Cannot open auth terminal: maximum terminals reached. Close a terminal first."
+    "maxTerminalsReached": "Cannot open auth terminal: maximum terminals reached. Close a terminal first.",
+    "listenerUnavailableTitle": "Auth terminal unavailable",
+    "listenerUnavailableDescription": "Auth terminal events are not available in this environment. Restart the app or use the desktop build."
   },
   "worktree": {
     "create": "Worktree",
