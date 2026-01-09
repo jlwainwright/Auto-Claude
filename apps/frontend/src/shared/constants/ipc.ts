@@ -512,5 +512,20 @@ export const IPC_CHANNELS = {
   // Sentry error reporting
   SENTRY_STATE_CHANGED: 'sentry:state-changed',  // Notify main process when setting changes
   GET_SENTRY_DSN: 'sentry:get-dsn',              // Get DSN from main process (env var)
-  GET_SENTRY_CONFIG: 'sentry:get-config'         // Get full Sentry config (DSN + sample rates)
+  GET_SENTRY_CONFIG: 'sentry:get-config',        // Get full Sentry config (DSN + sample rates)
+
+  // Status Report operations
+  STATUS_REPORT_GENERATE: 'statusReport:generate',           // Generate status report JSON
+  STATUS_REPORT_GET_SUMMARY: 'statusReport:getSummary',     // Get quick summary only
+
+  // Anomaly Fix operations (AI-powered resolution)
+  ANOMALY_FIX_START: 'anomaly:fix:start',                   // Start AI fix for an anomaly
+  ANOMALY_FIX_CANCEL: 'anomaly:fix:cancel',                 // Cancel running fix
+  ANOMALY_FIX_GET_STATE: 'anomaly:fix:getState',            // Get current fix state
+
+  // Anomaly Fix events (main -> renderer)
+  ANOMALY_FIX_LOG: 'anomaly:fix:log',                       // Streaming log entry
+  ANOMALY_FIX_PROGRESS: 'anomaly:fix:progress',             // Progress update
+  ANOMALY_FIX_COMPLETE: 'anomaly:fix:complete',             // Fix completed
+  ANOMALY_FIX_ERROR: 'anomaly:fix:error',                   // Fix failed
 } as const;
