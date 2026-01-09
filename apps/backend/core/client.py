@@ -547,8 +547,9 @@ def create_client(
         # But we'll set ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN later
         sdk_env = get_sdk_env_vars()
         # Remove any existing ANTHROPIC_BASE_URL from OS env that might interfere
-        sdk_env.pop("ANTHROPIC_BASE_URL", None)
-        sdk_env.pop("ANTHROPIC_AUTH_TOKEN", None)
+        old_base_url = sdk_env.pop("ANTHROPIC_BASE_URL", None)
+        old_auth_token = sdk_env.pop("ANTHROPIC_AUTH_TOKEN", None)
+        logger.info(f"Z.AI provider: removed old ANTHROPIC_BASE_URL={old_base_url}, ANTHROPIC_AUTH_TOKEN={old_auth_token}")
     else:
         sdk_env = {}
 
@@ -908,5 +909,10 @@ def create_client(
     # See: https://platform.claude.com/docs/en/agent-sdk/subagents
     if agents:
         options_kwargs["agents"] = agents
+
+    # Debug: Log final SDK environment before creating client
+    logger.info(f"Creating ClaudeSDKClient with provider={provider_id}, model={model}")
+    logger.info(f"  sdk_env ANTHROPIC_BASE_URL={sdk_env.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
+    logger.info(f"  os.environ ANTHROPIC_BASE_URL={os.environ.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
 
     return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
