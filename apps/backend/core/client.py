@@ -542,6 +542,13 @@ def create_client(
         os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
         # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
         sdk_env = get_sdk_env_vars()
+    elif is_zhipuai_provider(provider_id):
+        # Z.AI providers also need SDK env vars (NO_PROXY, DISABLE_TELEMETRY, etc.)
+        # But we'll set ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN later
+        sdk_env = get_sdk_env_vars()
+        # Remove any existing ANTHROPIC_BASE_URL from OS env that might interfere
+        sdk_env.pop("ANTHROPIC_BASE_URL", None)
+        sdk_env.pop("ANTHROPIC_AUTH_TOKEN", None)
     else:
         sdk_env = {}
 
@@ -843,10 +850,16 @@ def create_client(
             # See: https://docs.bigmodel.cn/cn/guide/develop/claude
             api_key = get_zhipuai_api_key(provider_id)
             base_url = get_provider_base_url(provider_id)
+            logger.info(f"Z.AI provider detected - using base_url: {base_url}")
             if base_url:
+                # Set in both os.environ (for SDK subprocess) and sdk_env (for explicit passthrough)
+                os.environ["ANTHROPIC_BASE_URL"] = base_url
                 sdk_env["ANTHROPIC_BASE_URL"] = base_url
+                logger.info(f"Set ANTHROPIC_BASE_URL={base_url}")
             if api_key:
+                os.environ["ANTHROPIC_AUTH_TOKEN"] = api_key
                 sdk_env["ANTHROPIC_AUTH_TOKEN"] = api_key
+                logger.info(f"Set ANTHROPIC_AUTH_TOKEN=***{api_key[-10:]}")
             # Continue to use native Claude SDK below (no early return)
         else:
             # Other providers use OpenAI-compatible API

@@ -89,12 +89,14 @@ def get_provider_base_url(provider: str | None) -> str | None:
     provider_id = normalize_provider(provider)
 
     if provider_id in ("zai", "glm", "zhipu", "zhipuai"):
-        # Z.AI provides a Claude-compatible endpoint
+        # Z.AI (ZhipuAI) provides a Claude-compatible endpoint
+        # IMPORTANT: Use open.bigmodel.cn, NOT api.z.ai for Claude-compatible API
         # See: https://docs.bigmodel.cn/cn/guide/develop/claude
+        # Correct endpoint: https://open.bigmodel.cn/api/anthropic
         return (
             os.environ.get("ZAI_BASE_URL")
             or os.environ.get("GLM_BASE_URL")
-            or "https://open.bigmodel.cn/api/anthropic"
+            or "https://open.bigmodel.cn/api/anthropic"  # ZhipuAI's Claude-compatible endpoint
         )
 
     # For claude provider, use default (None = Anthropic's default endpoint)
