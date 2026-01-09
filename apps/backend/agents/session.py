@@ -7,6 +7,7 @@ memory updates, recovery tracking, and Linear integration.
 """
 
 import logging
+import traceback
 from pathlib import Path
 from typing import Any, AsyncIterator, Protocol
 
@@ -551,14 +552,24 @@ async def run_agent_session(
         return "continue", response_text
 
     except Exception as e:
+        tb = traceback.format_exc()
+        error_summary = f"Session error ({type(e).__name__}): {e}"
         debug_error(
             "session",
-            f"Session error: {e}",
+            error_summary,
             exception_type=type(e).__name__,
             message_count=message_count,
             tool_count=tool_count,
         )
         print(f"Error during agent session: {e}")
         if task_logger:
-            task_logger.log_error(f"Session error: {e}", phase)
+            task_logger.log_with_detail(
+                error_summary,
+                detail=tb,
+                entry_type=LogEntryType.ERROR,
+                phase=phase,
+                subphase="SESSION ERROR",
+                collapsed=True,
+                print_to_console=False,
+            )
         return "error", str(e)

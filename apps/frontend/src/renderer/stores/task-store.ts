@@ -84,7 +84,11 @@ function validatePlanData(plan: ImplementationPlan): boolean {
       }
 
       // Description is critical - we can't show a subtask without it
-      if (!subtask.description || typeof subtask.description !== 'string' || subtask.description.trim() === '') {
+      // Backwards compatibility: some older plans used `title` instead of `description`.
+      const description = (subtask as { description?: unknown; title?: unknown }).description
+        ?? (subtask as { title?: unknown }).title;
+
+      if (!description || typeof description !== 'string' || description.trim() === '') {
         console.warn(`[validatePlanData] Invalid subtask at phase ${i}, index ${j}: missing or empty description`);
         return false;
       }
@@ -174,11 +178,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
             phase.subtasks.map((subtask) => {
               // Ensure all required fields have valid values to prevent UI issues
               // Use crypto.randomUUID() for stronger randomness when available
-              const id = subtask.id || (typeof crypto !== 'undefined' && crypto.randomUUID
+              const legacyId = (subtask as unknown as { subtask_id?: unknown }).subtask_id;
+              const id = subtask.id || (typeof legacyId === 'string' && legacyId.trim() ? legacyId : undefined) || (typeof crypto !== 'undefined' && crypto.randomUUID
                 ? crypto.randomUUID()
                 : `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-              // Defensive fallback: validatePlanData() ensures description exists, but kept for safety
-              const description = subtask.description || 'No description available';
+
+              // Defensive fallback: validatePlanData() ensures description/title exists, but kept for safety
+              const legacyTitle = (subtask as unknown as { title?: unknown }).title;
+              const rawDescription = subtask.description || (typeof legacyTitle === 'string' ? legacyTitle : undefined);
+              const description = rawDescription || 'No description available';
               const title = description; // Title and description are the same for subtasks
               const status = (subtask.status as SubtaskStatus) || 'pending';
 

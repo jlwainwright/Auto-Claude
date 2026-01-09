@@ -5,6 +5,16 @@ import { vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, rmSync, existsSync } from 'fs';
 import path from 'path';
 
+// Polyfill requestAnimationFrame for node test environment
+if (typeof globalThis.requestAnimationFrame === 'undefined') {
+  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+    setTimeout(() => callback(Date.now()), 0)) as unknown as typeof globalThis.requestAnimationFrame;
+}
+
+if (typeof globalThis.cancelAnimationFrame === 'undefined') {
+  globalThis.cancelAnimationFrame = ((id: number) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>)) as unknown as typeof globalThis.cancelAnimationFrame;
+}
+
 // Mock localStorage for tests that need it
 const localStorageMock = (() => {
   let store: Record<string, string> = {};

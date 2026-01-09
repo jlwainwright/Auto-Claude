@@ -2,7 +2,7 @@ import { app } from 'electron';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, Dirent } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
+import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask, SubtaskStatus } from '../shared/types';
 import { DEFAULT_PROJECT_SETTINGS, AUTO_BUILD_PATHS, getSpecsDir } from '../shared/constants';
 import { getAutoBuildPath, isInitialized } from './project-initializer';
 import { getTaskWorktreeDir } from './worktree-paths';
@@ -458,15 +458,35 @@ export class ProjectStore {
         const { status, reviewReason } = this.determineTaskStatusAndReason(plan, specPath, metadata);
 
         // Extract subtasks from plan (handle both 'subtasks' and 'chunks' naming)
-        const subtasks = plan?.phases?.flatMap((phase) => {
+        // Backwards compatibility: some older plans used `subtask_id` + `title` instead of `id` + `description`.
+        const subtasks = plan?.phases?.flatMap((phase, phaseIndex) => {
           const items = phase.subtasks || (phase as { chunks?: PlanSubtask[] }).chunks || [];
-          return items.map((subtask) => ({
-            id: subtask.id,
-            title: subtask.description,
-            description: subtask.description,
-            status: subtask.status,
-            files: []
-          }));
+          return items.map((subtask, subtaskIndex) => {
+            const legacy = subtask as unknown as { subtask_id?: unknown; title?: unknown; status?: unknown };
+
+            const rawId = (subtask as unknown as { id?: unknown }).id ?? legacy.subtask_id;
+            const id = typeof rawId === 'string' && rawId.trim()
+              ? rawId
+              : `phase-${phaseIndex + 1}-subtask-${subtaskIndex + 1}`;
+
+            const rawDescription = (subtask as unknown as { description?: unknown }).description ?? legacy.title;
+            const description = typeof rawDescription === 'string' ? rawDescription : '';
+
+            const rawStatus = legacy.status ?? (subtask as unknown as { status?: unknown }).status;
+            const status: SubtaskStatus = rawStatus === 'pending' || rawStatus === 'in_progress' || rawStatus === 'completed' || rawStatus === 'failed'
+              ? rawStatus
+              : rawStatus === 'done'
+                ? 'completed'
+                : 'pending';
+
+            return {
+              id,
+              title: description,
+              description,
+              status,
+              files: []
+            };
+          });
         }) || [];
 
         // Extract staged status from plan (set when changes are merged with --no-commit)

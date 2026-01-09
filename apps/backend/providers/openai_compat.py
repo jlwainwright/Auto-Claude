@@ -132,6 +132,7 @@ class OpenAICompatClient:
         self.project_dir = Path(project_dir).resolve()
         self.spec_dir = Path(spec_dir).resolve()
         self.max_turns = max_turns
+        self.base_url = base_url
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self._events: list[Any] = []
         self._messages: list[dict[str, Any]] = []
@@ -196,8 +197,39 @@ class OpenAICompatClient:
                 tool_choice="auto" if self.tool_defs else None,
             )
 
-            choice = response.choices[0]
-            message = choice.message
+            choices = getattr(response, "choices", None)
+            if not choices:
+                base_url = getattr(self.client, "base_url", None) or self.base_url
+                base_url_str = str(base_url) if base_url else "<default>"
+
+                hint = ""
+                if "anthropic" in base_url_str:
+                    hint = (
+                        " Base URL contains 'anthropic' and is likely not OpenAI-compatible."
+                        " Use an OpenAI-compatible base URL (often ends with /v1)."
+                    )
+                    if "z.ai" in base_url_str:
+                        hint += (
+                            " For Z.AI, the default OpenAI-compatible base URL is"
+                            " https://api.z.ai/api/coding/paas/v4."
+                        )
+
+                raise ValueError(
+                    "OpenAI-compatible provider returned an invalid chat completion response "
+                    "(missing 'choices'). "
+                    f"model={self.model} base_url={base_url_str}.{hint}"
+                )
+
+            choice = choices[0]
+            message = getattr(choice, "message", None)
+            if message is None:
+                base_url = getattr(self.client, "base_url", None) or self.base_url
+                base_url_str = str(base_url) if base_url else "<default>"
+                raise ValueError(
+                    "OpenAI-compatible provider returned an invalid chat completion response "
+                    "(missing 'message'). "
+                    f"model={self.model} base_url={base_url_str}."
+                )
             blocks: list[Any] = []
 
             if message.content:

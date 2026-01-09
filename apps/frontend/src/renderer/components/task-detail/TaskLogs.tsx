@@ -186,7 +186,7 @@ interface PhaseLogSectionProps {
   isExpanded: boolean;
   onToggle: () => void;
   isTaskStuck?: boolean;
-  phaseConfig?: { model: string; thinking: string } | null;
+  phaseConfig?: { model: string; thinking: string; provider: string } | null;
 }
 
 function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig }: PhaseLogSectionProps) {

@@ -4,7 +4,7 @@ import { IPC_CHANNELS, DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import type { IPCResult, ProjectEnvConfig, ClaudeAuthResult, AppSettings } from '../../shared/types';
 import path from 'path';
 import { app } from 'electron';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { spawn } from 'child_process';
 import { projectStore } from '../project-store';
 import { parseEnvFile } from './utils';
