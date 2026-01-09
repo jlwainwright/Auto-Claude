@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import subprocess
@@ -18,9 +19,20 @@ from typing import Any
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
+import httpx
+
 from openai import AsyncOpenAI
 
 from security import validate_command
+
+logger = logging.getLogger(__name__)
+
+# Default timeout for OpenAI-compatible API calls (120 seconds)
+# Z.AI and other providers may have different latency characteristics
+# Can be overridden via OPENAI_COMPAT_TIMEOUT_SECONDS environment variable
+_DEFAULT_TIMEOUT_SECONDS = float(os.environ.get("OPENAI_COMPAT_TIMEOUT_SECONDS", "120.0"))
+_DEFAULT_CONNECT_TIMEOUT = float(os.environ.get("OPENAI_COMPAT_CONNECT_TIMEOUT", "20.0"))
+DEFAULT_TIMEOUT = httpx.Timeout(_DEFAULT_TIMEOUT_SECONDS, connect=_DEFAULT_CONNECT_TIMEOUT)
 
 SUPPORTED_TOOLS: set[str] = {
     "Read",
@@ -133,7 +145,13 @@ class OpenAICompatClient:
         self.spec_dir = Path(spec_dir).resolve()
         self.max_turns = max_turns
         self.base_url = base_url
-        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        # Use explicit timeout to prevent hangs on slow/non-responsive providers
+        # 120s timeout for API calls, 20s for connection
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=DEFAULT_TIMEOUT,
+        )
         self._events: list[Any] = []
         self._messages: list[dict[str, Any]] = []
 
@@ -230,16 +248,66 @@ class OpenAICompatClient:
                     "(missing 'message'). "
                     f"model={self.model} base_url={base_url_str}."
                 )
+
+            # Debug: Log response details for troubleshooting
+            content_preview = str(getattr(message, "content", None))[:100] if getattr(message, "content", None) else None
+            tool_count = len(getattr(message, "tool_calls", None) or [])
+            logger.debug(
+                f"[OpenAICompat] Turn {turns}/{self.max_turns}: "
+                f"model={self.model}, "
+                f"content={repr(content_preview)}, "
+                f"tool_calls={tool_count}"
+            )
+
             blocks: list[Any] = []
 
-            if message.content:
+            # Track if we got any meaningful response
+            has_content = False
+            has_tool_calls = False
+
+            # Check for actual text content (not just empty/whitespace)
+            content = getattr(message, "content", None)
+            if content and str(content).strip():
                 blocks.append(TextBlock(message.content))
+                has_content = True
 
             tool_calls = getattr(message, "tool_calls", None) or []
+            if tool_calls:
+                has_tool_calls = True
+
             for tool_call in tool_calls:
                 tool_name = tool_call.function.name
                 tool_args = self._parse_tool_args(tool_call.function.arguments)
                 blocks.append(ToolUseBlock(tool_name, tool_args))
+
+            # Detect empty response - model returned neither text nor tools
+            # This can happen with some providers (e.g., Z.AI) when the model
+            # cannot process the prompt or tool definitions properly
+            if not has_content and not has_tool_calls:
+                base_url = getattr(self.client, "base_url", None) or self.base_url
+                base_url_str = str(base_url) if base_url else "<default>"
+
+                # Provide helpful error message
+                error_detail = (
+                    f"OpenAI-compatible provider returned an empty response. "
+                    f"This can happen when:\n"
+                    f"  1. The model doesn't support the requested tools\n"
+                    f"  2. The prompt is too long or malformed\n"
+                    f"  3. The provider API has issues\n\n"
+                    f"Provider response: content={repr(content)}, tool_calls={len(tool_calls) if tool_calls else 0}\n"
+                    f"model={self.model} base_url={base_url_str}\n\n"
+                    f"Troubleshooting:\n"
+                    f"  - Try using Claude provider instead\n"
+                    f"  - Check if ZAI_API_KEY is valid\n"
+                    f"  - Reduce prompt length or simplify the task"
+                )
+
+                self._events.append(
+                    AssistantMessage(
+                        [TextBlock(f"[OpenAICompat] Empty response detected.\n\n{error_detail}")]
+                    )
+                )
+                break
 
             if blocks:
                 self._events.append(AssistantMessage(blocks))

@@ -137,13 +137,52 @@ from claude_agent_sdk.types import HookMatcher
 from core.auth import get_sdk_env_vars, require_auth_token
 from core.provider_config import (
     get_openai_compat_config,
+    get_provider_base_url,
+    get_zhipuai_api_key,
     is_claude_provider,
+    is_zhipuai_provider,
     normalize_provider,
 )
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from providers.openai_compat import OpenAICompatClient
 from security import bash_security_hook
+
+
+def _map_zhipuai_model(model: str) -> str:
+    """
+    Map Auto-Claude model names to Z.AI GLM model names for Claude-compatible endpoint.
+
+    Z.AI's Claude-compatible endpoint (https://open.bigmodel.cn/api/anthropic)
+    accepts GLM model names directly. This function handles any necessary mapping.
+
+    Args:
+        model: The model name requested by Auto-Claude
+
+    Returns:
+        The actual GLM model name to use
+    """
+    # Z.AI Claude-compatible endpoint model mappings
+    # Most models map directly, but we handle any special cases here
+    zhipuai_model_map = {
+        # GLM-4.7 series (latest)
+        "claude-opus-4-5-20251101": "glm-4.7",  # Map default Opus to GLM-4.7
+        "claude-sonnet-4-5-20250929": "glm-4.5",
+        "claude-sonnet-4-5-latest": "glm-4.5",
+        "claude-3.5-sonnet": "glm-4.5",
+        "claude-3-opus": "glm-4",
+        # Direct GLM model names (pass through)
+        "glm-4.7": "glm-4.7",
+        "glm-4-7": "glm-4.7",
+        "glm-4.5": "glm-4.5",
+        "glm-4-5": "glm-4.5",
+        "glm-4.5-air": "glm-4.5-air",
+        "glm-4.5-flash": "GLM-4.5-Flash",
+        "glm-4": "glm-4",
+        "glm-4-flash": "GLM-4-Flash",
+        "glm-4-air": "GLM-4-Air",
+    }
+    return zhipuai_model_map.get(model, model)
 
 
 def _validate_custom_mcp_server(server: dict) -> bool:
@@ -492,6 +531,11 @@ def create_client(
     """
     provider_id = normalize_provider(provider)
 
+    # Map model names for Z.AI Claude-compatible endpoint
+    # Z.AI's Claude-compatible endpoint uses GLM model names
+    if is_zhipuai_provider(provider_id):
+        model = _map_zhipuai_model(model)
+
     if is_claude_provider(provider_id):
         oauth_token = require_auth_token()
         # Ensure SDK can access it via its expected env var
@@ -793,17 +837,30 @@ def create_client(
     print()
 
     if not is_claude_provider(provider_id):
-        provider_cfg = get_openai_compat_config(provider_id)
-        return OpenAICompatClient(
-            model=model,
-            system_prompt=base_prompt,
-            allowed_tools=allowed_tools_list,
-            project_dir=project_dir,
-            spec_dir=spec_dir,
-            api_key=provider_cfg.api_key,
-            base_url=provider_cfg.base_url,
-            max_turns=1000,
-        )
+        if is_zhipuai_provider(provider_id):
+            # Z.AI provides a Claude-compatible endpoint!
+            # Use native Claude SDK with custom base URL (like Claude Code does)
+            # See: https://docs.bigmodel.cn/cn/guide/develop/claude
+            api_key = get_zhipuai_api_key(provider_id)
+            base_url = get_provider_base_url(provider_id)
+            if base_url:
+                sdk_env["ANTHROPIC_BASE_URL"] = base_url
+            if api_key:
+                sdk_env["ANTHROPIC_AUTH_TOKEN"] = api_key
+            # Continue to use native Claude SDK below (no early return)
+        else:
+            # Other providers use OpenAI-compatible API
+            provider_cfg = get_openai_compat_config(provider_id)
+            return OpenAICompatClient(
+                model=model,
+                system_prompt=base_prompt,
+                allowed_tools=allowed_tools_list,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                api_key=provider_cfg.api_key,
+                base_url=provider_cfg.base_url,
+                max_turns=1000,
+            )
 
     # Build options dict, conditionally including output_format
     options_kwargs = {
