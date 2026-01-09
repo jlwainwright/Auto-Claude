@@ -358,8 +358,27 @@ function StatusBreakdown({ report }: { report: StatusReport }) {
   );
 }
 
-// Anomaly type breakdown
-function AnomalyBreakdown({ report }: { report: StatusReport }) {
+// Anomaly type breakdown with fix buttons
+function AnomalyBreakdown({
+  report,
+  activeFixes,
+  onStartFix,
+  onViewLogs
+}: {
+  report: StatusReport;
+  activeFixes: Map<string, AnomalyFixState>;
+  onStartFix: (spec: SpecStatusRow, anomaly: Anomaly) => void;
+  onViewLogs: (fixId: string) => void;
+}) {
+  // Build a map of anomalies to their specs
+  const anomalyToSpec: Map<string, SpecStatusRow> = new Map();
+  for (const spec of report.specs) {
+    for (const anomaly of spec.anomalies) {
+      const key = `${anomaly.type}-${anomaly.detail}`;
+      anomalyToSpec.set(key, spec);
+    }
+  };
+
   const allAnomalies: Anomaly[] = [];
   for (const spec of report.specs) {
     allAnomalies.push(...spec.anomalies);
@@ -382,17 +401,16 @@ function AnomalyBreakdown({ report }: { report: StatusReport }) {
         <CardTitle>Anomalies by Type</CardTitle>
         <CardDescription>Grouped detection results</CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {sortedTypes.map(([type, anomalies]) => {
-            const errorCount = anomalies.filter((a) => a.severity === 'error').length;
-            const severityClass = errorCount > 0 ? 'border-destructive' : '';
+      <CardContent className="space-y-3">
+        {sortedTypes.map(([type, anomalies]) => {
+          const errorCount = anomalies.filter((a) => a.severity === 'error').length;
+          const severityClass = errorCount > 0 ? 'border-destructive' : '';
 
-            return (
+          return (
+            <div key={type} className="border rounded-lg overflow-hidden">
               <div
-                key={type}
                 className={cn(
-                  "flex items-center justify-between p-2 rounded border",
+                  "flex items-center justify-between p-2 bg-muted/30",
                   severityClass
                 )}
               >
@@ -414,14 +432,77 @@ function AnomalyBreakdown({ report }: { report: StatusReport }) {
                   )}
                 </div>
               </div>
-            );
-          })}
-          {sortedTypes.length === 0 && (
-            <div className="text-sm text-muted-foreground text-center py-4">
-              No anomalies detected
+
+              {/* Individual anomalies with fix buttons */}
+              <div className="border-t p-2 space-y-1">
+                {anomalies.map((anomaly, idx) => {
+                  const Icon = severityIcons[anomaly.severity];
+                  const anomalyKey = `${anomaly.type}-${anomaly.detail}`;
+                  const spec = anomalyToSpec.get(anomalyKey);
+
+                  // Check for active fix
+                  const activeFix = spec && Array.from(activeFixes.values()).find(
+                    f => f.specId === spec.spec_id &&
+                    f.anomaly.type === anomaly.type &&
+                    f.anomaly.detail === anomaly.detail
+                  );
+
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2 text-sm p-2 rounded bg-background group"
+                    >
+                      <Icon className="h-3 w-3 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-muted-foreground text-xs truncate">{anomaly.detail}</p>
+                        <div className="mt-1 flex items-center gap-1">
+                          {spec && (
+                            <Badge variant="outline" className="text-xs px-1 py-0 h-4">
+                              {spec.spec_id}
+                            </Badge>
+                          )}
+                          {activeFix && (
+                            <Badge variant="outline" className={cn("text-xs", getFixStatusColor(activeFix.status))}>
+                              {getFixStatusLabel(activeFix.status)}
+                            </Badge>
+                          )}
+                          <div className="ml-auto">
+                            {activeFix ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-1.5 text-xs"
+                                onClick={() => onViewLogs(activeFix.fixId)}
+                              >
+                                <Terminal className="h-2.5 w-2.5 mr-1" />
+                                View
+                              </Button>
+                            ) : spec && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-1.5 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => onStartFix(spec, anomaly)}
+                              >
+                                <Wand2 className="h-2.5 w-2.5 mr-1" />
+                                Fix
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          )}
-        </div>
+          );
+        })}
+        {sortedTypes.length === 0 && (
+          <div className="text-sm text-muted-foreground text-center py-4">
+            No anomalies detected
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -678,7 +759,12 @@ export function StatusReportPage({ projectId }: StatusReportPageProps) {
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <StatusBreakdown report={report} />
-                    <AnomalyBreakdown report={report} />
+                    <AnomalyBreakdown
+                      report={report}
+                      activeFixes={activeFixes}
+                      onStartFix={handleStartFix}
+                      onViewLogs={handleViewLogs}
+                    />
                   </div>
 
                   {/* Roadmap info */}
