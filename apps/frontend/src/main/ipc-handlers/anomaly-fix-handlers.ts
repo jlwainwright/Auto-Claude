@@ -31,9 +31,10 @@ const fixStates = new Map<string, AnomalyFixState>();
 
 /**
  * Find the Auto-Claude installation root
- * (reuses logic from status-report-handlers)
+ * Uses multiple search strategies to locate the installation
  */
 function findAutoClaudeRoot(projectPath: string): string | null {
+  // Strategy 1: Walk up from project path (up to 15 levels)
   let searchDir = path.resolve(projectPath);
   for (let i = 0; i < 15; i++) {
     const scriptsPath = path.join(searchDir, 'scripts', 'fix_anomaly.py');
@@ -44,6 +45,38 @@ function findAutoClaudeRoot(projectPath: string): string | null {
     if (parent === searchDir) break;
     searchDir = parent;
   }
+
+  // Strategy 2: Check relative to app installation (go up from app to find repo root)
+  const appRoot = path.join(__dirname, '..', '..', '..', '..', '..');
+  for (let i = 0; i < 5; i++) {
+    const checkPath = path.resolve(appRoot, ...Array(i).fill('..'), 'scripts', 'fix_anomaly.py');
+    const rootDir = path.resolve(path.dirname(checkPath), '..');
+    if (existsSync(checkPath)) {
+      return rootDir;
+    }
+  }
+
+  // Strategy 3: Check DevFolder (specific to user's setup)
+  const devFolderPath = '/Users/jacques/DevFolder/Auto-Claude';
+  const devFolderScript = path.join(devFolderPath, 'scripts', 'fix_anomaly.py');
+  if (existsSync(devFolderScript)) {
+    return devFolderPath;
+  }
+
+  // Strategy 4: Check common Auto-Claude fork paths
+  const commonPaths = [
+    '/Users/jacques/DevFolder/Auto-Claude',
+    path.join(process.env.HOME || '', 'DevFolder', 'Auto-Claude'),
+    path.join(process.env.HOME || '', 'Projects', 'Auto-Claude'),
+  ];
+
+  for (const checkPath of commonPaths) {
+    const scriptPath = path.join(checkPath, 'scripts', 'fix_anomaly.py');
+    if (existsSync(scriptPath)) {
+      return checkPath;
+    }
+  }
+
   return null;
 }
 
