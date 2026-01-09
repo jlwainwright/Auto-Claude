@@ -914,5 +914,11 @@ def create_client(
     logger.info(f"Creating ClaudeSDKClient with provider={provider_id}, model={model}")
     logger.info(f"  sdk_env ANTHROPIC_BASE_URL={sdk_env.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
     logger.info(f"  os.environ ANTHROPIC_BASE_URL={os.environ.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
+    # Always print debug info for Z.AI provider
+    if is_zhipuai_provider(provider_id):
+        print(f"[DEBUG] Z.AI Client Configuration:")
+        print(f"[DEBUG]   sdk_env ANTHROPIC_BASE_URL={sdk_env.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
+        print(f"[DEBUG]   os.environ ANTHROPIC_BASE_URL={os.environ.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
+        print(f"[DEBUG]   model={model}")
 
     return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
