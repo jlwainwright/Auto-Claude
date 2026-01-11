@@ -8,7 +8,8 @@ Extracts imports, builds dependency graphs, and categorizes imports.
 
 from __future__ import annotations
 
+from .graph_builder import DependencyGraphBuilder
 from .js_parser import JSDependencyParser
 from .python_parser import PythonDependencyParser
 
-__all__ = ["PythonDependencyParser", "JSDependencyParser"]
+__all__ = ["PythonDependencyParser", "JSDependencyParser", "DependencyGraphBuilder"]
