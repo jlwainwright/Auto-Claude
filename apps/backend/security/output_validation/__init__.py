@@ -76,6 +76,16 @@ from .custom_rules import (
     validate_pattern_safety,
 )
 
+# Allowed paths support
+from .allowed_paths import (
+    AllowedPathsChecker,
+    compile_glob_patterns,
+    get_allowed_paths,
+    is_path_allowed,
+    normalize_pattern,
+    pattern_to_regex,
+)
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -119,4 +129,11 @@ __all__ = [
     "validate_pattern_safety",
     "get_custom_rule_ids",
     "get_active_rules",
+    # Allowed paths support
+    "AllowedPathsChecker",
+    "is_path_allowed",
+    "get_allowed_paths",
+    "compile_glob_patterns",
+    "normalize_pattern",
+    "pattern_to_regex",
 ]
