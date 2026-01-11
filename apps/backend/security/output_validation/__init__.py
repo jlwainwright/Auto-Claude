@@ -55,6 +55,16 @@ from .rules import (
 # Main validation hook
 from .hook import output_validation_hook, reset_hook
 
+# Configuration loading
+from .config import (
+    ValidationConfigLoader,
+    clear_config_cache,
+    get_config_file_path,
+    get_validation_config,
+    is_yaml_available,
+    load_validation_config,
+)
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -83,4 +93,11 @@ __all__ = [
     # Main hook
     "output_validation_hook",
     "reset_hook",
+    # Configuration loading
+    "ValidationConfigLoader",
+    "load_validation_config",
+    "get_validation_config",
+    "clear_config_cache",
+    "get_config_file_path",
+    "is_yaml_available",
 ]
