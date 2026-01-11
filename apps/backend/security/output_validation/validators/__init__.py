@@ -12,10 +12,13 @@ Validators:
 - bash_validator: Validate Bash tool operations (commands)
 """
 
+from .bash_validator import validate_bash, validate_bash_advanced
 from .edit_validator import validate_edit
 from .write_validator import validate_write
 
 __all__ = [
+    "validate_bash",
+    "validate_bash_advanced",
     "validate_edit",
     "validate_write",
 ]
