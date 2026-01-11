@@ -113,6 +113,14 @@ from .logger import (
     log_path_bypassed,
 )
 
+# Validation report generation
+from .report import (
+    ValidationReportGenerator,
+    generate_validation_report,
+    generate_and_save_report,
+    print_validation_summary,
+)
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -184,4 +192,9 @@ __all__ = [
     "log_warning",
     "log_override_used",
     "log_path_bypassed",
+    # Validation report generation
+    "ValidationReportGenerator",
+    "generate_validation_report",
+    "generate_and_save_report",
+    "print_validation_summary",
 ]
