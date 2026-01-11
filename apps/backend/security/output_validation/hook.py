@@ -12,6 +12,7 @@ This hook:
 - Integrates with existing bash_security_hook (extends, doesn't replace)
 """
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +22,21 @@ from .models import (
     ToolType,
     ValidationResult,
 )
+from .overrides import (
+    OverrideTokenManager,
+    format_file_scope,
+    format_command_scope,
+    list_override_tokens,
+)
 from .pattern_detector import create_pattern_detector
 from .rules import get_default_rules
+
+
+# =============================================================================
+# LOGGER
+# =============================================================================
+
+logger = logging.getLogger(__name__)
 
 
 # Global pattern detector instance (lazy loaded)
@@ -61,6 +75,108 @@ def _get_config(project_dir: Path | None = None) -> OutputValidationConfig:
             strict_mode=False,
         )
     return _config
+
+
+def _get_override_context(
+    tool_type: ToolType,
+    tool_input: dict[str, Any],
+) -> str | None:
+    """
+    Get the context string for override token matching.
+
+    Args:
+        tool_type: Type of tool being validated
+        tool_input: Tool input parameters
+
+    Returns:
+        Context string (e.g., "file:/path", "command:pattern") or None
+    """
+    if tool_type == ToolType.WRITE or tool_type == ToolType.EDIT:
+        file_path = tool_input.get("file_path", "")
+        if file_path:
+            return format_file_scope(file_path)
+
+    elif tool_type == ToolType.BASH:
+        command = tool_input.get("command", "")
+        if command:
+            return format_command_scope(command)
+
+    # For other tool types, return None (context-agnostic tokens only)
+    return None
+
+
+def _check_override_tokens(
+    rule_id: str,
+    tool_type: ToolType,
+    tool_input: dict[str, Any],
+    project_dir: Path | None,
+) -> tuple[bool, str | None]:
+    """
+    Check if there's a valid override token for the blocked operation.
+
+    Args:
+        rule_id: ID of the rule that was triggered
+        tool_type: Type of tool being validated
+        tool_input: Tool input parameters
+        project_dir: Project directory path
+
+    Returns:
+        Tuple of (should_allow, token_id_used)
+        - should_allow: True if valid token found and used
+        - token_id_used: ID of the token used (or None)
+    """
+    if not project_dir:
+        # No project directory, can't check tokens
+        return False, None
+
+    try:
+        # Get context for token matching
+        context = _get_override_context(tool_type, tool_input)
+
+        # List all valid tokens for this rule
+        tokens = list_override_tokens(
+            project_dir=project_dir,
+            rule_id=rule_id,
+            include_expired=False,
+        )
+
+        if not tokens:
+            logger.debug(f"No override tokens found for rule: {rule_id}")
+            return False, None
+
+        # Try to find a token that applies to this context
+        manager = OverrideTokenManager(project_dir)
+
+        for token in tokens:
+            # Check if token applies to the context
+            if context and not token.applies_to(context):
+                logger.debug(
+                    f"Token {token.token_id} does not apply to context: {context}"
+                )
+                continue
+
+            # Token applies - use it
+            if manager.validate_and_use_token(
+                token_id=token.token_id,
+                rule_id=rule_id,
+                context=context or "",
+            ):
+                logger.info(
+                    f"Override token used: {token.token_id} "
+                    f"for rule {rule_id}, "
+                    f"context={context or 'all'}, "
+                    f"reason={token.reason or 'N/A'}"
+                )
+                return True, token.token_id
+
+        # No applicable token found
+        logger.debug(f"No applicable override token for rule: {rule_id}, context: {context}")
+        return False, None
+
+    except Exception as e:
+        # If override checking fails, fail safe by blocking
+        logger.error(f"Error checking override tokens: {e}")
+        return False, None
 
 
 async def output_validation_hook(
@@ -158,6 +274,23 @@ async def output_validation_hook(
         )
 
         if result.is_blocked:
+            # Check for override tokens before blocking
+            should_allow, token_id = _check_override_tokens(
+                rule_id=result.rule_id or "",
+                tool_type=tool_type,
+                tool_input=tool_input,
+                project_dir=project_dir,
+            )
+
+            if should_allow:
+                # Override token found and used - allow the operation
+                logger.info(
+                    f"Operation allowed via override token: {token_id} "
+                    f"for rule {result.rule_id}"
+                )
+                return {}
+
+            # No override token - block the operation
             return {
                 "decision": "block",
                 "reason": result.reason,

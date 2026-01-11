@@ -192,9 +192,12 @@ class TokenStorage:
         auto_claude_dir.mkdir(parents=True, exist_ok=True)
         return auto_claude_dir / TOKENS_FILENAME
 
-    def load_tokens(self) -> dict[str, OverrideToken]:
+    def load_tokens(self, include_invalid: bool = False) -> dict[str, OverrideToken]:
         """
         Load tokens from file.
+
+        Args:
+            include_invalid: If True, include expired/exhausted tokens
 
         Returns:
             Dict mapping token_id -> OverrideToken
@@ -207,24 +210,28 @@ class TokenStorage:
             with open(self.tokens_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            # Parse tokens and filter out expired ones
+            # Parse tokens
             tokens = {}
-            now = datetime.now(timezone.utc)
+            skipped_count = 0
 
             for token_data in data.get("tokens", []):
                 token = OverrideToken.from_dict(token_data)
 
-                # Skip expired or exhausted tokens
-                if not token.is_valid():
+                # Skip expired or exhausted tokens (unless include_invalid is True)
+                if not include_invalid and not token.is_valid():
                     logger.debug(
                         f"Skipping expired/exhausted token: {token.token_id}"
                     )
+                    skipped_count += 1
                     continue
 
                 tokens[token.token_id] = token
 
             self.tokens = tokens
-            logger.info(f"Loaded {len(tokens)} valid override tokens")
+            logger.info(
+                f"Loaded {len(tokens)} override tokens "
+                f"({skipped_count} skipped)"
+            )
 
             return tokens
 
@@ -621,7 +628,11 @@ class OverrideTokenManager:
         Returns:
             List of OverrideToken objects
         """
-        self._ensure_loaded()
+        # Force reload from disk when including expired tokens to get fresh data
+        if include_expired:
+            self.storage.load_tokens(include_invalid=True)
+        else:
+            self._ensure_loaded()
 
         if include_expired:
             # Return all tokens
