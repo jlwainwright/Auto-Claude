@@ -6,6 +6,7 @@ Data models for representing codebase graphs, file nodes, dependency edges,
 architecture patterns, and service boundaries.
 """
 
+from .analysis_result import EnhancedAnalysisResult
 from .architecture_models import (
     ArchitectureAnalysis,
     ArchitecturePatternDetection,
@@ -38,4 +39,6 @@ __all__ = [
     "ExposedAPI",
     "PatternIndicator",
     "LayerType",
+    # Analysis result
+    "EnhancedAnalysisResult",
 ]
