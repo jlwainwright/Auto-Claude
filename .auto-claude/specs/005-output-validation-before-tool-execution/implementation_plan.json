@@ -2,7 +2,7 @@
   "feature": "Output Validation Before Tool Execution",
   "description": "Add output validation layer that inspects agent-generated commands and file changes before execution. This catches potentially harmful operations that slip through the allowlist.",
   "created_at": "2026-01-11T19:18:36.442Z",
-  "updated_at": "2026-01-11T21:44:38.337Z",
+  "updated_at": "2026-01-11T21:46:12.004Z",
   "status": "in_progress",
   "planStatus": "in_progress",
   "phases": [
@@ -383,17 +383,19 @@
           "id": "6.4",
           "title": "Update documentation",
           "description": "Document the output validation system in CLAUDE.md and create dedicated guide for configuration.",
-          "status": "pending",
+          "status": "completed",
           "files": [
             "CLAUDE.md",
-            "guides/output-validation.md"
+            "guides/output-validation.md",
+            "guides/README.md"
           ],
           "acceptance_criteria": [
             "Add output validation section to CLAUDE.md",
             "Create comprehensive guide with examples",
             "Document all default rules and their IDs",
             "Document override mechanism with examples"
-          ]
+          ],
+          "notes": "Added comprehensive output validation section to CLAUDE.md explaining the four-layer security model and the new output validation system. Created detailed 400+ line guide (guides/output-validation.md) covering: overview, architecture, configuration (JSON/YAML), complete rule reference with all 40+ default rules, override mechanism with CLI commands, validation reports, best practices, troubleshooting, advanced topics, and security considerations. Updated guides/README.md to include the new guide. All acceptance criteria met."
         }
       ]
     }
