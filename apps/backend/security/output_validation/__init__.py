@@ -65,6 +65,17 @@ from .config import (
     load_validation_config,
 )
 
+# Custom rules support
+from .custom_rules import (
+    CustomRuleError,
+    apply_config_overrides,
+    get_active_rules,
+    get_custom_rule_ids,
+    load_custom_rules,
+    merge_with_defaults,
+    validate_pattern_safety,
+)
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -100,4 +111,12 @@ __all__ = [
     "clear_config_cache",
     "get_config_file_path",
     "is_yaml_available",
+    # Custom rules support
+    "CustomRuleError",
+    "load_custom_rules",
+    "merge_with_defaults",
+    "apply_config_overrides",
+    "validate_pattern_safety",
+    "get_custom_rule_ids",
+    "get_active_rules",
 ]
