@@ -86,6 +86,22 @@ from .allowed_paths import (
     pattern_to_regex,
 )
 
+# Override token management
+from .overrides import (
+    OverrideTokenManager,
+    TokenStorage,
+    cleanup_expired_tokens,
+    format_command_scope,
+    format_file_scope,
+    generate_override_token,
+    list_override_tokens,
+    parse_scope,
+    revoke_override_token,
+    use_override_token,
+    validate_and_use_override_token,
+    validate_override_token,
+)
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -136,4 +152,17 @@ __all__ = [
     "compile_glob_patterns",
     "normalize_pattern",
     "pattern_to_regex",
+    # Override token management
+    "OverrideTokenManager",
+    "TokenStorage",
+    "generate_override_token",
+    "validate_override_token",
+    "use_override_token",
+    "validate_and_use_override_token",
+    "revoke_override_token",
+    "list_override_tokens",
+    "cleanup_expired_tokens",
+    "format_file_scope",
+    "format_command_scope",
+    "parse_scope",
 ]
