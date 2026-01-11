@@ -32,3 +32,8 @@ class TaskContext:
     graph_hints: list[dict] = field(
         default_factory=list
     )  # Historical hints from Graphiti
+    # Enhanced analysis data (optional)
+    codebase_graph_summary: dict | None = None  # Summary of codebase graph (key files, dependency counts)
+    architecture_patterns: list[dict] | None = None  # Detected architecture patterns
+    service_boundaries: list[dict] | None = None  # Identified service boundaries
+    file_dependencies: dict[str, list[str]] | None = None  # Dependencies for files mentioned in spec

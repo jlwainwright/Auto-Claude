@@ -9,7 +9,9 @@ import asyncio
 import json
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
+from analysis.enhanced_analyzer import EnhancedProjectAnalyzer
 from .categorizer import FileCategorizer
 from .graphiti_integration import fetch_graph_hints, is_graphiti_enabled
 from .keyword_extractor import KeywordExtractor
@@ -45,12 +47,202 @@ class ContextBuilder:
 
         return analyze_project(self.project_dir)
 
+    def _create_codebase_graph_summary(
+        self, codebase_graph: Any
+    ) -> dict[str, Any]:
+        """
+        Create a summary of the codebase graph for context.
+
+        Args:
+            codebase_graph: CodebaseGraph object from enhanced analysis
+
+        Returns:
+            Dictionary with graph summary (key files, dependency counts, etc.)
+        """
+        # Get key files (highly connected files)
+        key_files = []
+        if hasattr(codebase_graph, 'nodes'):
+            # Sort nodes by dependency count (most connected first)
+            nodes_by_connections = sorted(
+                codebase_graph.nodes.values(),
+                key=lambda n: len(getattr(n, 'imports', [])) + len(getattr(n, 'exported_by', [])),
+                reverse=True
+            )[:20]  # Top 20 most connected files
+
+            key_files = [
+                {
+                    "path": getattr(node, 'path', ''),
+                    "language": getattr(node, 'language', ''),
+                    "dependency_count": len(getattr(node, 'imports', [])) + len(getattr(node, 'exported_by', [])),
+                }
+                for node in nodes_by_connections
+            ]
+
+        return {
+            "total_files": len(getattr(codebase_graph, 'nodes', {})),
+            "total_dependencies": len(getattr(codebase_graph, 'edges', [])),
+            "key_files": key_files,
+        }
+
+    def _extract_architecture_patterns(self, analysis_result: Any) -> list[dict]:
+        """
+        Extract detected architecture patterns from analysis result.
+
+        Args:
+            analysis_result: EnhancedAnalysisResult from enhanced analysis
+
+        Returns:
+            List of detected patterns with confidence scores
+        """
+        patterns = []
+
+        if hasattr(analysis_result, 'architecture_analysis'):
+            arch_analysis = analysis_result.architecture_analysis
+            if hasattr(arch_analysis, 'patterns'):
+                for pattern in arch_analysis.patterns:
+                    patterns.append({
+                        "name": getattr(pattern, 'name', ''),
+                        "confidence": getattr(pattern, 'confidence', 0.0),
+                        "description": getattr(pattern, 'description', ''),
+                    })
+
+        return patterns
+
+    def _extract_service_boundaries(self, analysis_result: Any) -> list[dict]:
+        """
+        Extract identified service boundaries from analysis result.
+
+        Args:
+            analysis_result: EnhancedAnalysisResult from enhanced analysis
+
+        Returns:
+            List of service boundaries
+        """
+        boundaries = []
+
+        if hasattr(analysis_result, 'architecture_analysis'):
+            arch_analysis = analysis_result.architecture_analysis
+            if hasattr(arch_analysis, 'service_boundaries'):
+                for boundary in arch_analysis.service_boundaries:
+                    boundaries.append({
+                        "name": getattr(boundary, 'name', ''),
+                        "entry_points": getattr(boundary, 'entry_points', []),
+                        "dependencies": getattr(boundary, 'dependencies', []),
+                    })
+
+        return boundaries
+
+    def _extract_file_dependencies(
+        self,
+        analysis_result: Any,
+        files_of_interest: list[str]
+    ) -> dict[str, list[str]]:
+        """
+        Extract dependencies for specific files from analysis result.
+
+        Args:
+            analysis_result: EnhancedAnalysisResult from enhanced analysis
+            files_of_interest: List of file paths to get dependencies for
+
+        Returns:
+            Dictionary mapping file paths to their dependencies
+        """
+        dependencies = {}
+
+        if hasattr(analysis_result, 'codebase_graph'):
+            graph = analysis_result.codebase_graph
+
+            for file_path in files_of_interest:
+                # Find the node for this file
+                node = None
+                if hasattr(graph, 'nodes'):
+                    # Try exact match first
+                    node = graph.nodes.get(file_path)
+
+                    # Try relative match if not found
+                    if not node:
+                        for node_path, node_obj in graph.nodes.items():
+                            if file_path in node_path or node_path in file_path:
+                                node = node_obj
+                                break
+
+                if node:
+                    deps = []
+                    if hasattr(node, 'imports'):
+                        deps = [str(imp) for imp in node.imports]
+                    dependencies[file_path] = deps
+
+        return dependencies
+
+    def _add_enhanced_analysis(
+        self,
+        task: str,
+        files_to_modify: list[dict],
+        spec_dir: Path | None = None,
+    ) -> tuple[dict | None, list[dict] | None, list[dict] | None, dict | None]:
+        """
+        Add enhanced analysis data to context.
+
+        Args:
+            task: Task description
+            files_to_modify: List of files to be modified
+            spec_dir: Optional spec directory for caching
+
+        Returns:
+            Tuple of (graph_summary, architecture_patterns, service_boundaries, file_dependencies)
+        """
+        try:
+            # Initialize enhanced analyzer
+            analyzer = EnhancedProjectAnalyzer(
+                project_dir=self.project_dir,
+                spec_dir=spec_dir,
+                use_cache=True,
+            )
+
+            # Run enhanced analysis
+            analysis_result = analyzer.analyze()
+
+            # Create graph summary
+            graph_summary = self._create_codebase_graph_summary(
+                analysis_result.codebase_graph
+            )
+
+            # Extract architecture patterns
+            architecture_patterns = self._extract_architecture_patterns(
+                analysis_result
+            )
+
+            # Extract service boundaries
+            service_boundaries = self._extract_service_boundaries(
+                analysis_result
+            )
+
+            # Extract file dependencies for files to be modified
+            files_of_interest = [f.get('path', '') for f in files_to_modify if isinstance(f, dict) and 'path' in f]
+            file_dependencies = self._extract_file_dependencies(
+                analysis_result,
+                files_of_interest
+            ) if files_of_interest else None
+
+            return (
+                graph_summary,
+                architecture_patterns,
+                service_boundaries,
+                file_dependencies,
+            )
+
+        except Exception:
+            # Enhanced analysis is optional - fail gracefully
+            return None, None, None, None
+
     def build_context(
         self,
         task: str,
         services: list[str] | None = None,
         keywords: list[str] | None = None,
         include_graph_hints: bool = True,
+        spec_dir: Path | None = None,
+        include_enhanced_analysis: bool = True,
     ) -> TaskContext:
         """
         Build context for a specific task.
@@ -60,6 +252,8 @@ class ContextBuilder:
             services: List of service names to search (None = auto-detect)
             keywords: Additional keywords to search for
             include_graph_hints: Whether to include historical hints from Graphiti
+            spec_dir: Optional spec directory for enhanced analysis caching
+            include_enhanced_analysis: Whether to include enhanced analysis data
 
         Returns:
             TaskContext with relevant files and patterns
@@ -123,6 +317,23 @@ class ContextBuilder:
                 # Graphiti is optional - fail gracefully
                 graph_hints = []
 
+        # Add enhanced analysis data (optional)
+        codebase_graph_summary = None
+        architecture_patterns = None
+        service_boundaries = None
+        file_dependencies = None
+
+        if include_enhanced_analysis:
+            files_to_modify_dict = [
+                asdict(f) if isinstance(f, FileMatch) else f for f in files_to_modify
+            ]
+            (
+                codebase_graph_summary,
+                architecture_patterns,
+                service_boundaries,
+                file_dependencies,
+            ) = self._add_enhanced_analysis(task, files_to_modify_dict, spec_dir)
+
         return TaskContext(
             task_description=task,
             scoped_services=services,
@@ -135,6 +346,10 @@ class ContextBuilder:
             patterns_discovered=patterns,
             service_contexts=service_contexts,
             graph_hints=graph_hints,
+            codebase_graph_summary=codebase_graph_summary,
+            architecture_patterns=architecture_patterns,
+            service_boundaries=service_boundaries,
+            file_dependencies=file_dependencies,
         )
 
     async def build_context_async(
@@ -143,6 +358,8 @@ class ContextBuilder:
         services: list[str] | None = None,
         keywords: list[str] | None = None,
         include_graph_hints: bool = True,
+        spec_dir: Path | None = None,
+        include_enhanced_analysis: bool = True,
     ) -> TaskContext:
         """
         Build context for a specific task (async version).
@@ -155,6 +372,8 @@ class ContextBuilder:
             services: List of service names to search (None = auto-detect)
             keywords: Additional keywords to search for
             include_graph_hints: Whether to include historical hints from Graphiti
+            spec_dir: Optional spec directory for enhanced analysis caching
+            include_enhanced_analysis: Whether to include enhanced analysis data
 
         Returns:
             TaskContext with relevant files and patterns
@@ -204,6 +423,23 @@ class ContextBuilder:
         if include_graph_hints:
             graph_hints = await fetch_graph_hints(task, str(self.project_dir))
 
+        # Add enhanced analysis data (optional)
+        codebase_graph_summary = None
+        architecture_patterns = None
+        service_boundaries = None
+        file_dependencies = None
+
+        if include_enhanced_analysis:
+            files_to_modify_dict = [
+                asdict(f) if isinstance(f, FileMatch) else f for f in files_to_modify
+            ]
+            (
+                codebase_graph_summary,
+                architecture_patterns,
+                service_boundaries,
+                file_dependencies,
+            ) = self._add_enhanced_analysis(task, files_to_modify_dict, spec_dir)
+
         return TaskContext(
             task_description=task,
             scoped_services=services,
@@ -216,6 +452,10 @@ class ContextBuilder:
             patterns_discovered=patterns,
             service_contexts=service_contexts,
             graph_hints=graph_hints,
+            codebase_graph_summary=codebase_graph_summary,
+            architecture_patterns=architecture_patterns,
+            service_boundaries=service_boundaries,
+            file_dependencies=file_dependencies,
         )
 
     def _get_service_context(
