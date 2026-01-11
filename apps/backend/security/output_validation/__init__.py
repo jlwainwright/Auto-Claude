@@ -102,6 +102,17 @@ from .overrides import (
     validate_override_token,
 )
 
+# Validation event logging
+from .logger import (
+    ValidationEventLogger,
+    get_validation_logger,
+    reset_validation_logger,
+    log_blocked_operation,
+    log_warning,
+    log_override_used,
+    log_path_bypassed,
+)
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -165,4 +176,12 @@ __all__ = [
     "format_file_scope",
     "format_command_scope",
     "parse_scope",
+    # Validation event logging
+    "ValidationEventLogger",
+    "get_validation_logger",
+    "reset_validation_logger",
+    "log_blocked_operation",
+    "log_warning",
+    "log_override_used",
+    "log_path_bypassed",
 ]
