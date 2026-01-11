@@ -10,6 +10,8 @@ and builds FileNode and DependencyEdge objects into a complete CodebaseGraph.
 from __future__ import annotations
 
 import hashlib
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,14 +58,19 @@ class DependencyGraphBuilder:
         "*.map",
     }
 
-    def __init__(self, project_root: Path | str):
+    # Cache filename
+    CACHE_FILENAME = ".auto-claude-graph.json"
+
+    def __init__(self, project_root: Path | str, spec_dir: Path | None = None):
         """
         Initialize the graph builder.
 
         Args:
             project_root: Root directory of the project to analyze.
+            spec_dir: Optional spec directory for storing cache.
         """
         self.project_root = Path(project_root).resolve()
+        self.spec_dir = Path(spec_dir).resolve() if spec_dir else None
         self.python_parser = PythonDependencyParser(self.project_root)
         self.js_parser = JSDependencyParser(self.project_root)
 
@@ -521,3 +528,305 @@ class DependencyGraphBuilder:
         local_modules.update(js_modules)
 
         return local_modules
+
+    def get_cache_path(self) -> Path:
+        """Get the path where graph cache should be stored."""
+        if self.spec_dir:
+            return self.spec_dir / self.CACHE_FILENAME
+        return self.project_root / self.CACHE_FILENAME
+
+    def load_cached_graph(self) -> CodebaseGraph | None:
+        """
+        Load cached dependency graph if it exists.
+
+        Returns:
+            Cached CodebaseGraph or None if cache doesn't exist/invalid.
+        """
+        cache_path = self.get_cache_path()
+        if not cache_path.exists():
+            return None
+
+        try:
+            with open(cache_path) as f:
+                data = json.load(f)
+            return CodebaseGraph.from_dict(data)
+        except (OSError, json.JSONDecodeError, KeyError):
+            return None
+
+    def save_graph(self, graph: CodebaseGraph) -> None:
+        """
+        Save dependency graph to cache.
+
+        Args:
+            graph: CodebaseGraph to save.
+        """
+        cache_path = self.get_cache_path()
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Update metadata
+        graph.analyzed_at = datetime.now().isoformat()
+        graph.graph_hash = self._compute_graph_hash(graph)
+
+        with open(cache_path, "w") as f:
+            json.dump(graph.to_dict(), f, indent=2)
+
+    def build_incremental(self, force: bool = False) -> CodebaseGraph:
+        """
+        Build dependency graph with incremental updates.
+
+        Only re-parses files that have changed since last analysis.
+
+        Args:
+            force: Force full rebuild even if cache exists.
+
+        Returns:
+            Complete CodebaseGraph with updated nodes and edges.
+        """
+        # Try to load cached graph
+        cached_graph = None if force else self.load_cached_graph()
+
+        if cached_graph is None:
+            # No cache or force rebuild - do full build
+            return self.build()
+
+        # Discover current files
+        current_files = self._discover_files()
+
+        # Detect changed files
+        changed_files = self._get_changed_files(cached_graph, current_files)
+
+        if not changed_files:
+            # No changes - return cached graph
+            return cached_graph
+
+        # Build node lookup from cached graph
+        cached_nodes_by_path: dict[str, FileNode] = {
+            node.file_path: node for node in cached_graph.nodes
+        }
+
+        # Determine new files and deleted files
+        current_file_paths = {str(f) for f in current_files}
+        cached_file_paths = set(cached_nodes_by_path.keys())
+
+        new_files = current_file_paths - cached_file_paths
+        deleted_files = cached_file_paths - current_file_paths
+        modified_files = set(str(f) for f in changed_files) - new_files
+
+        # Start with cached graph
+        nodes = list(cached_graph.nodes)
+        edges = list(cached_graph.edges)
+
+        # Handle deleted files
+        if deleted_files:
+            nodes, edges = self._handle_deleted_files(deleted_files, nodes, edges)
+
+        # Handle new files
+        if new_files:
+            new_nodes, new_edges = self._handle_new_files(
+                [Path(f) for f in new_files], nodes
+            )
+            nodes.extend(new_nodes)
+            edges.extend(new_edges)
+
+        # Handle modified files
+        if modified_files:
+            nodes, edges = self._handle_modified_files(
+                [Path(f) for f in modified_files], nodes, edges
+            )
+
+        # Re-detect circular dependencies
+        self._detect_circular_dependencies(edges)
+
+        # Build complete graph
+        graph = CodebaseGraph(
+            nodes=nodes,
+            edges=edges,
+            metrics=self._calculate_metrics(nodes, edges),
+            project_dir=str(self.project_root),
+            architecture_pattern=cached_graph.architecture_pattern,
+            service_boundaries=cached_graph.service_boundaries,
+            analyzer_version=cached_graph.analyzer_version,
+        )
+
+        # Save updated graph
+        self.save_graph(graph)
+
+        return graph
+
+    def _compute_graph_hash(self, graph: CodebaseGraph) -> str:
+        """
+        Compute hash of graph for change detection.
+
+        Args:
+            graph: CodebaseGraph to hash.
+
+        Returns:
+            Hex digest hash.
+        """
+        hasher = hashlib.md5(usedforsecurity=False)
+
+        # Hash node file paths and their hashes
+        for node in sorted(graph.nodes, key=lambda n: n.file_path):
+            hasher.update(f"{node.file_path}:{node.hash}".encode())
+
+        return hasher.hexdigest()
+
+    def _get_changed_files(
+        self, cached_graph: CodebaseGraph, current_files: list[Path]
+    ) -> list[Path]:
+        """
+        Identify files that have changed since last analysis.
+
+        Args:
+            cached_graph: Previously cached graph.
+            current_files: Current list of files in the project.
+
+        Returns:
+            List of files that have changed (new or modified).
+        """
+        changed_files = []
+        cached_nodes_by_path: dict[str, FileNode] = {
+            node.file_path: node for node in cached_graph.nodes
+        }
+
+        for file_path in current_files:
+            file_path_str = str(file_path)
+
+            # Check if file is new
+            if file_path_str not in cached_nodes_by_path:
+                changed_files.append(file_path)
+                continue
+
+            # Check if file has been modified by comparing hashes
+            current_hash = self._hash_file(file_path)
+            cached_node = cached_nodes_by_path[file_path_str]
+
+            if current_hash != cached_node.hash:
+                changed_files.append(file_path)
+
+        return changed_files
+
+    def _handle_deleted_files(
+        self, deleted_files: set[str], nodes: list[FileNode], edges: list[DependencyEdge]
+    ) -> tuple[list[FileNode], list[DependencyEdge]]:
+        """
+        Remove nodes and edges for deleted files.
+
+        Args:
+            deleted_files: Set of deleted file paths.
+            nodes: Current list of nodes.
+            edges: Current list of edges.
+
+        Returns:
+            Tuple of updated (nodes, edges).
+        """
+        # Remove nodes for deleted files
+        nodes = [node for node in nodes if node.file_path not in deleted_files]
+
+        # Remove edges involving deleted files
+        edges = [
+            edge
+            for edge in edges
+            if edge.from_file not in deleted_files and edge.to_file not in deleted_files
+        ]
+
+        return nodes, edges
+
+    def _handle_new_files(
+        self, new_files: list[Path], existing_nodes: list[FileNode]
+    ) -> tuple[list[FileNode], list[DependencyEdge]]:
+        """
+        Add nodes and edges for new files.
+
+        Args:
+            new_files: List of new file paths.
+            existing_nodes: Current list of nodes (for edge resolution).
+
+        Returns:
+            Tuple of (new_nodes, new_edges).
+        """
+        # Build nodes for new files
+        new_nodes = self._build_nodes(new_files)
+
+        # Build edges for new files
+        all_nodes = existing_nodes + new_nodes
+        new_edges = []
+        node_by_path: dict[str, FileNode] = {node.file_path: node for node in all_nodes}
+
+        # Get local modules once
+        if self._local_modules is None:
+            self._local_modules = self._get_local_modules()
+
+        for node in new_nodes:
+            file_path = Path(node.file_path)
+            language = node.language
+
+            # Parse based on language
+            if language == "Python":
+                new_edges.extend(self._build_python_edges(file_path, node, node_by_path))
+            elif language in ["JavaScript", "TypeScript"]:
+                new_edges.extend(self._build_js_edges(file_path, node, node_by_path))
+
+        return new_nodes, new_edges
+
+    def _handle_modified_files(
+        self, modified_files: list[Path], nodes: list[FileNode], edges: list[DependencyEdge]
+    ) -> tuple[list[FileNode], list[DependencyEdge]]:
+        """
+        Update nodes and edges for modified files.
+
+        Args:
+            modified_files: List of modified file paths.
+            nodes: Current list of nodes.
+            edges: Current list of edges.
+
+        Returns:
+            Tuple of updated (nodes, edges).
+        """
+        # Build node lookup
+        node_by_path: dict[str, FileNode] = {node.file_path: node for node in nodes}
+
+        for file_path in modified_files:
+            file_path_str = str(file_path)
+
+            # Remove old edges for this file
+            edges = [edge for edge in edges if edge.from_file != file_path_str]
+
+            # Update the node
+            if file_path_str in node_by_path:
+                node = node_by_path[file_path_str]
+                self._update_node(node, file_path)
+
+                # Build new edges for this file
+                language = node.language
+
+                if language == "Python":
+                    new_edges = self._build_python_edges(file_path, node, node_by_path)
+                    edges.extend(new_edges)
+                elif language in ["JavaScript", "TypeScript"]:
+                    new_edges = self._build_js_edges(file_path, node, node_by_path)
+                    edges.extend(new_edges)
+
+        return nodes, edges
+
+    def _update_node(self, node: FileNode, file_path: Path) -> None:
+        """
+        Update a FileNode with current file data.
+
+        Args:
+            node: FileNode to update.
+            file_path: Current file path.
+        """
+        # Get file metadata
+        try:
+            stat = file_path.stat()
+            node.line_count = self._count_lines(file_path)
+            node.hash = self._hash_file(file_path)
+            node.last_modified = str(stat.st_mtime)
+        except OSError:
+            # Skip files that can't be read
+            return
+
+        # Clear and reset imports/exports
+        node.imports = []
+        node.exports = []

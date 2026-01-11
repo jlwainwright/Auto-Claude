@@ -10,8 +10,15 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from .models.analysis_result import EnhancedAnalysisResult
+
+# Import graph models for type hints (avoid circular import)
+try:
+    from ..models.graph_models import CodebaseGraph
+except ImportError:
+    CodebaseGraph = Any  # type: ignore
 
 
 class AnalysisCache:
@@ -310,3 +317,111 @@ class AnalysisCache:
 
         # Update timestamp
         result.analysis_timestamp = datetime.now().isoformat()
+
+    def get_graph_cache_path(self) -> Path:
+        """Get the path where dependency graph cache should be stored."""
+        if self.spec_dir:
+            return self.spec_dir / ".auto-claude-graph.json"
+        return self.project_dir / ".auto-claude-graph.json"
+
+    def load_graph_cache(self) -> CodebaseGraph | None:
+        """
+        Load cached dependency graph if it exists.
+
+        Returns:
+            Cached CodebaseGraph or None if cache doesn't exist/invalid.
+        """
+        cache_path = self.get_graph_cache_path()
+        if not cache_path.exists():
+            return None
+
+        try:
+            with open(cache_path) as f:
+                data = json.load(f)
+
+            # Import here to avoid circular dependency
+            from ..models.graph_models import CodebaseGraph
+
+            return CodebaseGraph.from_dict(data)
+        except (OSError, json.JSONDecodeError, KeyError):
+            return None
+
+    def save_graph_cache(self, graph: CodebaseGraph) -> None:
+        """
+        Save dependency graph to cache.
+
+        Args:
+            graph: CodebaseGraph to save.
+        """
+        cache_path = self.get_graph_cache_path()
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Update metadata
+        graph.analyzed_at = datetime.now().isoformat()
+
+        with open(cache_path, "w") as f:
+            json.dump(graph.to_dict(), f, indent=2)
+
+    def should_invalidate_graph(self, cached_graph: CodebaseGraph) -> bool:
+        """
+        Check if graph cache should be invalidated based on project changes.
+
+        Args:
+            cached_graph: Previously cached graph
+
+        Returns:
+            True if cache should be invalidated
+        """
+        current_hash = self.compute_project_hash()
+
+        # If project hash changed, invalidate cache
+        if current_hash != cached_graph.graph_hash:
+            return True
+
+        return False
+
+    def get_changed_files_for_graph(
+        self, cached_graph: CodebaseGraph, current_files: list[Path]
+    ) -> dict[str, list[Path]]:
+        """
+        Identify which files have changed since last graph analysis.
+
+        This supports partial invalidation by only re-analyzing changed files.
+
+        Args:
+            cached_graph: Previously cached graph
+            current_files: Current list of files in the project
+
+        Returns:
+            Dict with keys 'new', 'modified', 'deleted' containing file lists
+        """
+        result = {"new": [], "modified": [], "deleted": []}
+
+        # Build lookup from cached graph
+        cached_nodes_by_path: dict[str, Any] = {
+            node.file_path: node for node in cached_graph.nodes
+        }
+
+        current_file_set = {str(f) for f in current_files}
+        cached_file_set = set(cached_nodes_by_path.keys())
+
+        # Find new files
+        new_files = current_file_set - cached_file_set
+        result["new"] = [Path(f) for f in new_files]
+
+        # Find deleted files
+        deleted_files = cached_file_set - current_file_set
+        result["deleted"] = [Path(f) for f in deleted_files]
+
+        # Find modified files (compare hashes)
+        for file_path in current_files:
+            file_path_str = str(file_path)
+            if file_path_str in cached_file_set and file_path_str not in new_files:
+                cached_node = cached_nodes_by_path[file_path_str]
+                current_hash = self.compute_file_hash(file_path)
+
+                # Compare using the node's hash (content hash) or mod time
+                if current_hash != cached_node.hash:
+                    result["modified"].append(file_path)
+
+        return result
