@@ -36,6 +36,9 @@ from .models import (
     ValidationResult,
 )
 
+# Pattern detection engine
+from .pattern_detector import PatternDetector, PatternMatchResult, create_pattern_detector
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -47,4 +50,8 @@ __all__ = [
     "OutputValidationConfig",
     "OverrideToken",
     "ValidationEvent",
+    # Pattern detection
+    "PatternDetector",
+    "PatternMatchResult",
+    "create_pattern_detector",
 ]
