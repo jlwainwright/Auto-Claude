@@ -121,6 +121,17 @@ from .report import (
     print_validation_summary,
 )
 
+# User-friendly message formatting
+from .messages import (
+    format_block_message,
+    format_override_instruction,
+    format_short_block_message,
+    format_validation_summary,
+    format_tool_description,
+    get_documentation_url,
+    get_rule_documentation_link,
+)
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -197,4 +208,12 @@ __all__ = [
     "generate_validation_report",
     "generate_and_save_report",
     "print_validation_summary",
+    # User-friendly message formatting
+    "format_block_message",
+    "format_override_instruction",
+    "format_short_block_message",
+    "format_validation_summary",
+    "format_tool_description",
+    "get_documentation_url",
+    "get_rule_documentation_link",
 ]
