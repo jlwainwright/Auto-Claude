@@ -18,7 +18,7 @@ from .architecture.pattern_detector import ArchitecturePatternDetector
 from .architecture.service_boundary_detector import ServiceBoundaryDetector
 from .cache import AnalysisCache
 from .dependency.graph_builder import DependencyGraphBuilder
-from .models.analysis_result import EnhancedAnalysisResult
+from .models.analysis_result import EnhancedAnalysisResult, ImpactAnalysis, RiskLevel
 from .models.architecture_models import (
     ArchitectureAnalysis,
     ArchitecturePatternDetection,
@@ -434,3 +434,139 @@ class EnhancedProjectAnalyzer:
         print(f"  Cohesion: {architecture.cohesion_score:.2f}")
         print(f"  Coupling: {architecture.coupling_score:.2f}")
         print(f"  Modularity: {architecture.modularity_score:.2f}")
+
+    def get_impact_analysis(self, files: list[str]) -> ImpactAnalysis:
+        """
+        Analyze the impact of modifying specific files.
+
+        Traverses the dependency graph to find all dependents of the specified files,
+        identifies affected services, and calculates the risk level.
+
+        Args:
+            files: List of file paths (relative or absolute) to be modified
+
+        Returns:
+            ImpactAnalysis with affected files, services, and risk level
+        """
+        # Get the current analysis
+        result = self.analyze()
+        codebase_graph = result.codebase_graph
+
+        # Normalize file paths to be relative to project directory
+        normalized_files = []
+        for file_path in files:
+            path = Path(file_path)
+            if path.is_absolute():
+                try:
+                    normalized = str(path.relative_to(self.project_dir))
+                except ValueError:
+                    # File is not under project directory
+                    continue
+            else:
+                normalized = str(path)
+            normalized_files.append(normalized)
+
+        # Find all affected files (transitive dependents)
+        affected_files = set()
+        visited = set()
+
+        def find_dependents(file_path: str) -> None:
+            """Recursively find all dependents of a file."""
+            if file_path in visited:
+                return
+            visited.add(file_path)
+
+            # Get direct dependents (files that depend on this file)
+            dependents = codebase_graph.get_dependents_for_file(file_path)
+            for edge in dependents:
+                dependent_file = edge.from_file
+                if dependent_file not in visited:
+                    affected_files.add(dependent_file)
+                    find_dependents(dependent_file)
+
+        # Start with the files to be modified
+        for file_path in normalized_files:
+            find_dependents(file_path)
+            affected_files.add(file_path)
+
+        # Convert to sorted list
+        affected_files_list = sorted(affected_files)
+
+        # Identify affected services
+        affected_services_set = set()
+        file_to_service: dict[str, str] = {}
+
+        # Build mapping of files to services
+        for service in result.architecture_analysis.services:
+            service_path = service.path
+            for file_path in affected_files_list:
+                # Check if file belongs to this service
+                if file_path.startswith(service_path):
+                    file_to_service[file_path] = service.name
+                    affected_services_set.add(service.name)
+
+        affected_services_list = sorted(affected_services_set)
+
+        # Identify critical files affected
+        critical_files = []
+        if codebase_graph.metrics:
+            for file_path in affected_files_list:
+                if file_path in codebase_graph.metrics.critical_files:
+                    critical_files.append(file_path)
+
+        # Calculate risk level
+        risk_level = self._calculate_risk_level(
+            len(normalized_files),
+            len(affected_files_list),
+            len(affected_services_list),
+            len(critical_files),
+        )
+
+        # Create impact analysis result
+        impact = ImpactAnalysis(
+            affected_files=affected_files_list,
+            affected_services=affected_services_list,
+            risk_level=risk_level,
+            total_files_modified=len(normalized_files),
+            total_dependents=len(affected_files_list) - len(normalized_files),
+            critical_files_affected=critical_files,
+        )
+
+        return impact
+
+    def _calculate_risk_level(
+        self,
+        files_modified: int,
+        total_affected: int,
+        services_affected: int,
+        critical_files: int,
+    ) -> RiskLevel:
+        """
+        Calculate risk level based on impact metrics.
+
+        Args:
+            files_modified: Number of files being modified
+            total_affected: Total number of affected files
+            services_affected: Number of affected services
+            critical_files: Number of critical files affected
+
+        Returns:
+            RiskLevel (LOW, MEDIUM, or HIGH)
+        """
+        # High risk conditions:
+        # - Any critical files affected
+        # - More than 20 files affected
+        # - More than 3 services affected
+        if critical_files > 0 or total_affected > 20 or services_affected > 3:
+            return RiskLevel.HIGH
+
+        # Medium risk conditions:
+        # - More than 10 files affected
+        # - More than 1 service affected
+        # - Cascade factor (affected files / modified files) > 3
+        cascade_factor = total_affected / max(files_modified, 1)
+        if total_affected > 10 or services_affected > 1 or cascade_factor > 3:
+            return RiskLevel.MEDIUM
+
+        # Low risk: minimal impact
+        return RiskLevel.LOW

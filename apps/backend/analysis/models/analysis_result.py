@@ -9,10 +9,67 @@ for caching and persistence.
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from hashlib import sha256
 
 from .architecture_models import ArchitectureAnalysis
 from .graph_models import CodebaseGraph
+
+
+class RiskLevel(Enum):
+    """Risk level for impact analysis."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+@dataclass
+class ImpactAnalysis:
+    """Analysis of the impact of modifying specific files."""
+
+    # Files affected by the changes
+    affected_files: list[str] = field(default_factory=list)
+
+    # Services affected by the changes
+    affected_services: list[str] = field(default_factory=list)
+
+    # Risk level of the changes
+    risk_level: RiskLevel = RiskLevel.LOW
+
+    # Additional metadata
+    total_files_modified: int = 0
+    total_dependents: int = 0
+    critical_files_affected: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dict."""
+        return {
+            "affected_files": self.affected_files,
+            "affected_services": self.affected_services,
+            "risk_level": self.risk_level.value,
+            "total_files_modified": self.total_files_modified,
+            "total_dependents": self.total_dependents,
+            "critical_files_affected": self.critical_files_affected,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ImpactAnalysis":
+        """Load from dict."""
+        risk_level_str = data.get("risk_level", "low")
+        try:
+            risk_level = RiskLevel(risk_level_str)
+        except ValueError:
+            risk_level = RiskLevel.LOW
+
+        return cls(
+            affected_files=data.get("affected_files", []),
+            affected_services=data.get("affected_services", []),
+            risk_level=risk_level,
+            total_files_modified=data.get("total_files_modified", 0),
+            total_dependents=data.get("total_dependents", 0),
+            critical_files_affected=data.get("critical_files_affected", []),
+        )
 
 
 @dataclass
