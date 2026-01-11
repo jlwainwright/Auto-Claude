@@ -37,6 +37,7 @@ class EnhancedAnalysisResult:
     cache_key: str = ""
     is_cached: bool = False
     cache_hit: bool = False
+    file_modification_times: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self):
         """Initialize derived fields after creation."""
@@ -143,6 +144,7 @@ class EnhancedAnalysisResult:
             "cache_key": self.cache_key,
             "is_cached": self.is_cached,
             "cache_hit": self.cache_hit,
+            "file_modification_times": self.file_modification_times,
         }
 
     def to_json(self, indent: int = 2) -> str:
@@ -164,6 +166,7 @@ class EnhancedAnalysisResult:
             cache_key=data.get("cache_key", ""),
             is_cached=data.get("is_cached", False),
             cache_hit=data.get("cache_hit", False),
+            file_modification_times=data.get("file_modification_times", {}),
         )
 
         if "codebase_graph" in data:
