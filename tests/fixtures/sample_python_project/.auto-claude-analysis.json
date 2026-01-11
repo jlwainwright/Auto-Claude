@@ -1,0 +1,222 @@
+{
+  "codebase_graph": {
+    "nodes": [
+      {
+        "file_path": "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/__init__.py",
+        "file_type": "test",
+        "language": "Python",
+        "relative_path": "__init__.py",
+        "imports": [],
+        "exports": [],
+        "is_entry_point": false,
+        "is_test_file": true,
+        "is_config_file": false,
+        "line_count": 1,
+        "function_count": 0,
+        "class_count": 0,
+        "complexity_score": 0.0,
+        "last_modified": "1768156797.3448987",
+        "hash": "611472b2f8a9816f412315277acc3a872604e41d96e18b609cf8cab8ae72db54"
+      },
+      {
+        "file_path": "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/app.py",
+        "file_type": "test",
+        "language": "Python",
+        "relative_path": "app.py",
+        "imports": [
+          "flask",
+          "models.user",
+          "services.auth_service"
+        ],
+        "exports": [],
+        "is_entry_point": true,
+        "is_test_file": true,
+        "is_config_file": false,
+        "line_count": 23,
+        "function_count": 0,
+        "class_count": 0,
+        "complexity_score": 0.0,
+        "last_modified": "1768156797.2793725",
+        "hash": "d69e44d3c6f6727aae60985449bdbfba795a5ee2a755bff90933541b667f05c4"
+      },
+      {
+        "file_path": "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/utils/helpers.py",
+        "file_type": "test",
+        "language": "Python",
+        "relative_path": "utils/helpers.py",
+        "imports": [
+          "typing",
+          "typing"
+        ],
+        "exports": [],
+        "is_entry_point": false,
+        "is_test_file": true,
+        "is_config_file": false,
+        "line_count": 12,
+        "function_count": 0,
+        "class_count": 0,
+        "complexity_score": 0.0,
+        "last_modified": "1768156797.3201282",
+        "hash": "581bc5d84117e1369baf81cfe0399930b9fa3494a134dd0e242addd9f61ff942"
+      },
+      {
+        "file_path": "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/models/user.py",
+        "file_type": "test",
+        "language": "Python",
+        "relative_path": "models/user.py",
+        "imports": [
+          "datetime",
+          "typing"
+        ],
+        "exports": [],
+        "is_entry_point": false,
+        "is_test_file": true,
+        "is_config_file": false,
+        "line_count": 26,
+        "function_count": 0,
+        "class_count": 0,
+        "complexity_score": 0.0,
+        "last_modified": "1768156797.2937615",
+        "hash": "2235363593e266290e418f1d5eb0db8650df47956d49330869442e197e52db28"
+      },
+      {
+        "file_path": "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/services/auth_service.py",
+        "file_type": "test",
+        "language": "Python",
+        "relative_path": "services/auth_service.py",
+        "imports": [
+          "typing",
+          "models.user"
+        ],
+        "exports": [],
+        "is_entry_point": false,
+        "is_test_file": true,
+        "is_config_file": false,
+        "line_count": 25,
+        "function_count": 0,
+        "class_count": 0,
+        "complexity_score": 0.0,
+        "last_modified": "1768156797.307963",
+        "hash": "3f3ba5b2661a3f3187dc90b2e880c77b537324bdbb1b27f4376dc9e9323a3cd7"
+      }
+    ],
+    "edges": [],
+    "metrics": {
+      "total_files": 5,
+      "total_dependencies": 0,
+      "total_functions": 0,
+      "total_classes": 0,
+      "average_complexity": 0.0,
+      "max_complexity": 0.0,
+      "circular_dependencies": 0,
+      "orphan_files": 5,
+      "average_coupling": 0.0,
+      "highly_coupled_files": 0,
+      "critical_files": [],
+      "language_distribution": {
+        "Python": 5
+      },
+      "service_count": 0,
+      "microservice_indicators": []
+    },
+    "architecture_pattern": "unknown",
+    "service_boundaries": {},
+    "project_dir": "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project",
+    "analyzed_at": "",
+    "graph_hash": "",
+    "analyzer_version": "1.0.0"
+  },
+  "architecture_analysis": {
+    "primary_pattern": {
+      "pattern": "mvc",
+      "confidence_score": 0.3,
+      "indicators": [],
+      "description": "Detected mvc architecture pattern",
+      "strengths": [],
+      "concerns": [],
+      "detected_layers": {},
+      "service_count": 0,
+      "independent_deployables": []
+    },
+    "secondary_patterns": [
+      {
+        "pattern": "layered",
+        "confidence_score": 0.15,
+        "indicators": [],
+        "description": "Detected layered architecture pattern",
+        "strengths": [],
+        "concerns": [],
+        "detected_layers": {},
+        "service_count": 0,
+        "independent_deployables": []
+      }
+    ],
+    "services": [
+      {
+        "name": "root",
+        "service_type": "root",
+        "confidence_score": 0.8,
+        "entry_points": [
+          "app.py"
+        ],
+        "internal_dependencies": [],
+        "external_dependencies": [],
+        "library_dependencies": [],
+        "exposed_apis": [],
+        "exported_modules": [],
+        "path": ".",
+        "language": "Python",
+        "framework": "",
+        "file_count": 0,
+        "is_standalone": true,
+        "has_database": false,
+        "has_background_jobs": false,
+        "has_messaging": false
+      },
+      {
+        "name": "services",
+        "service_type": "backend",
+        "confidence_score": 0.8,
+        "entry_points": [],
+        "internal_dependencies": [
+          "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/services/auth_service.py"
+        ],
+        "external_dependencies": [],
+        "library_dependencies": [],
+        "exposed_apis": [],
+        "exported_modules": [],
+        "path": "services",
+        "language": "Python",
+        "framework": "",
+        "file_count": 1,
+        "is_standalone": true,
+        "has_database": false,
+        "has_background_jobs": false,
+        "has_messaging": false
+      }
+    ],
+    "service_relationships": {},
+    "cohesion_score": 1.0,
+    "coupling_score": 0.0,
+    "modularity_score": 1.0,
+    "analyzed_at": "2026-01-11T20:42:38.385344",
+    "analyzer_version": "1.0.0",
+    "project_dir": "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project"
+  },
+  "analysis_timestamp": "2026-01-11T20:42:38.399639",
+  "project_hash": "db59bd8dea10ea5f2f4d5ce1399d3ea6",
+  "analyzer_version": "2.0.0",
+  "project_dir": "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project",
+  "total_files_analyzed": 5,
+  "analysis_duration_seconds": 0.015456914901733398,
+  "cache_key": "452d2ba5175c19cc84bd83ec6b5d1f5e",
+  "is_cached": true,
+  "cache_hit": false,
+  "file_modification_times": {
+    "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/__init__.py": 1768156797.3448987,
+    "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/app.py": 1768156797.2793725,
+    "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/utils/helpers.py": 1768156797.3201282,
+    "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/models/user.py": 1768156797.2937615,
+    "/Users/jacques/DevFolder/Auto-Claude/.auto-claude/worktrees/tasks/002-enhanced-project-analyzer/tests/fixtures/sample_python_project/services/auth_service.py": 1768156797.307963
+  }
+}
