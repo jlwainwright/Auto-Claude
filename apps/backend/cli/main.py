@@ -23,6 +23,12 @@ from .batch_commands import (
 )
 from .build_commands import handle_build_command
 from .followup_commands import handle_followup_command
+from .override_commands import (
+    handle_override_create_command,
+    handle_override_list_command,
+    handle_override_revoke_command,
+    print_override_help,
+)
 from .qa_commands import (
     handle_qa_command,
     handle_qa_status_command,
@@ -287,6 +293,62 @@ Environment Variables:
         help="Actually delete files in cleanup (not just preview)",
     )
 
+    # Override management
+    parser.add_argument(
+        "--override",
+        type=str,
+        default=None,
+        metavar="ACTION",
+        help="Manage validation override tokens (create, list, revoke)",
+    )
+    parser.add_argument(
+        "--override-rule",
+        type=str,
+        default=None,
+        metavar="RULE_ID",
+        help="With --override create: Rule ID to override",
+    )
+    parser.add_argument(
+        "--override-scope",
+        type=str,
+        default="all",
+        metavar="SCOPE",
+        help="With --override create: Override scope (all, file:<path>, command:<pattern>)",
+    )
+    parser.add_argument(
+        "--override-expiry",
+        type=int,
+        default=60,
+        metavar="MINUTES",
+        help="With --override create: Token expiry time in minutes (0 = no expiry)",
+    )
+    parser.add_argument(
+        "--override-max-uses",
+        type=int,
+        default=1,
+        metavar="COUNT",
+        help="With --override create: Maximum token uses (0 = unlimited)",
+    )
+    parser.add_argument(
+        "--override-reason",
+        type=str,
+        default="",
+        metavar="TEXT",
+        help="With --override create: Reason for the override",
+    )
+    parser.add_argument(
+        "--override-token",
+        type=str,
+        default=None,
+        metavar="TOKEN_ID",
+        help="With --override revoke: Token ID to revoke",
+    )
+    parser.add_argument(
+        "--include-expired",
+        action="store_true",
+        help="With --override list: Include expired/exhausted tokens",
+    )
+
     return parser.parse_args()
 
 
@@ -341,6 +403,65 @@ def main() -> None:
     if args.batch_cleanup:
         handle_batch_cleanup_command(str(project_dir), dry_run=not args.no_dry_run)
         return
+
+    # Handle override commands
+    if args.override:
+        action = args.override.lower()
+
+        if action == "help":
+            print_override_help()
+            return
+        elif action == "create":
+            if not args.override_rule:
+                print_banner()
+                print("\nError: --override-rule is required for create action")
+                print("\nUsage:")
+                print("  python auto-claude/run.py --override create <rule-id>")
+                print("\nFor help:")
+                print("  python auto-claude/run.py --override help")
+                sys.exit(1)
+
+            print_banner()
+            handle_override_create_command(
+                project_dir=project_dir,
+                rule_id=args.override_rule,
+                scope=args.override_scope,
+                expiry_minutes=args.override_expiry,
+                max_uses=args.override_max_uses,
+                reason=args.override_reason,
+            )
+            return
+        elif action == "list":
+            print_banner()
+            handle_override_list_command(
+                project_dir=project_dir,
+                rule_id=args.override_rule,
+                include_expired=args.include_expired,
+            )
+            return
+        elif action == "revoke":
+            if not args.override_token:
+                print_banner()
+                print("\nError: --override-token is required for revoke action")
+                print("\nUsage:")
+                print("  python auto-claude/run.py --override revoke --override-token <token-id>")
+                print("\nTo list available tokens:")
+                print("  python auto-claude/run.py --override list")
+                sys.exit(1)
+
+            print_banner()
+            handle_override_revoke_command(
+                project_dir=project_dir,
+                token_id=args.override_token,
+            )
+            return
+        else:
+            print_banner()
+            print(f"\nError: Unknown override action '{args.override}'")
+            print("\nValid actions: create, list, revoke, help")
+            print("\nFor help:")
+            print("  python auto-claude/run.py --override help")
+            sys.exit(1)
 
     # Require --spec if not listing
     if not args.spec:
