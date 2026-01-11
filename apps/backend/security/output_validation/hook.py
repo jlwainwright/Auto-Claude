@@ -244,6 +244,11 @@ async def output_validation_hook(
     elif context and isinstance(context, dict):
         project_dir = context.get("project_dir")
 
+    # Also check input_data for cwd (current working directory)
+    # The SDK passes this when client is created with cwd parameter
+    if not project_dir:
+        project_dir = input_data.get("cwd")
+
     if project_dir and isinstance(project_dir, str):
         project_dir = Path(project_dir)
 
