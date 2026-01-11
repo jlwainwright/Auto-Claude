@@ -39,6 +39,19 @@ from .models import (
 # Pattern detection engine
 from .pattern_detector import PatternDetector, PatternMatchResult, create_pattern_detector
 
+# Default validation rules
+from .rules import (
+    ALL_DEFAULT_RULES,
+    BASH_RULES,
+    FILE_PATH_RULES,
+    FILE_WRITE_RULES,
+    WEB_RULES,
+    get_default_rules,
+    get_rule_by_id,
+    list_rule_categories,
+    list_rule_ids,
+)
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -54,4 +67,14 @@ __all__ = [
     "PatternDetector",
     "PatternMatchResult",
     "create_pattern_detector",
+    # Default rules
+    "ALL_DEFAULT_RULES",
+    "BASH_RULES",
+    "FILE_WRITE_RULES",
+    "FILE_PATH_RULES",
+    "WEB_RULES",
+    "get_default_rules",
+    "get_rule_by_id",
+    "list_rule_categories",
+    "list_rule_ids",
 ]
