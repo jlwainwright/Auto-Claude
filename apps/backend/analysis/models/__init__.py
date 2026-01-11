@@ -2,9 +2,18 @@
 Codebase Graph Models
 ======================
 
-Data models for representing codebase graphs, file nodes, and dependency edges.
+Data models for representing codebase graphs, file nodes, dependency edges,
+architecture patterns, and service boundaries.
 """
 
+from .architecture_models import (
+    ArchitectureAnalysis,
+    ArchitecturePatternDetection,
+    ExposedAPI,
+    LayerType,
+    PatternIndicator,
+    ServiceBoundary,
+)
 from .graph_models import (
     ArchitecturePattern,
     CodebaseGraph,
@@ -15,10 +24,18 @@ from .graph_models import (
 )
 
 __all__ = [
+    # Graph models
     "FileNode",
     "DependencyEdge",
     "CodebaseGraph",
     "GraphMetrics",
     "DependencyType",
     "ArchitecturePattern",
+    # Architecture models
+    "ArchitectureAnalysis",
+    "ArchitecturePatternDetection",
+    "ServiceBoundary",
+    "ExposedAPI",
+    "PatternIndicator",
+    "LayerType",
 ]
