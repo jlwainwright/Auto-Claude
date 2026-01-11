@@ -12,14 +12,14 @@ from unittest.mock import patch
 
 import pytest
 
-from ..models import (
+from .models import (
     OutputValidationConfig,
     SeverityLevel,
     ToolType,
     ValidationEvent,
     ValidationResult,
 )
-from ..logger import (
+from .logger import (
     ValidationEventLogger,
     get_validation_logger,
     reset_validation_logger,

@@ -2,9 +2,9 @@
   "feature": "Output Validation Before Tool Execution",
   "description": "Add output validation layer that inspects agent-generated commands and file changes before execution. This catches potentially harmful operations that slip through the allowlist.",
   "created_at": "2026-01-11T19:18:36.442Z",
-  "updated_at": "2026-01-11T21:46:12.004Z",
-  "status": "in_progress",
-  "planStatus": "in_progress",
+  "updated_at": "2026-01-11T23:45:00Z",
+  "status": "qa_fix_requested",
+  "planStatus": "fixes_required",
   "phases": [
     {
       "id": "phase-1",
@@ -401,9 +401,50 @@
     }
   ],
   "qa_status": {
-    "status": "pending",
-    "issues": [],
-    "tests_passed": ""
+    "status": "rejected",
+    "timestamp": "2026-01-11T23:45:00Z",
+    "qa_session": 1,
+    "issues_found": [
+      {
+        "type": "critical",
+        "title": "Token Storage Load/Save Bug",
+        "location": "apps/backend/security/output_validation/overrides.py",
+        "fix_required": "Fix TokenStorage to properly serialize/deserialize tokens to/from JSON"
+      },
+      {
+        "type": "critical",
+        "title": "Report Generation Count Mismatch",
+        "location": "apps/backend/security/output_validation/report.py",
+        "fix_required": "Debug why event statistics don't match logged event count"
+      },
+      {
+        "type": "critical",
+        "title": "Missing Override Instructions in Block Messages",
+        "location": "apps/backend/security/output_validation/messages.py",
+        "fix_required": "Add override instructions when rule.can_override is True"
+      },
+      {
+        "type": "critical",
+        "title": "Backtick Escaping in Report",
+        "location": "apps/backend/security/output_validation/report.py",
+        "fix_required": "Remove markdown_escape from token ID rendering"
+      },
+      {
+        "type": "major",
+        "title": "Allowed Paths Pattern Matching Issues",
+        "location": "apps/backend/security/output_validation/allowed_paths.py",
+        "fix_required": "Fix single-star patterns, absolute paths, and pattern escaping"
+      },
+      {
+        "type": "major",
+        "title": "Custom Validator Requires ValidationRule Object",
+        "location": "apps/backend/security/output_validation/models.py:214",
+        "fix_required": "Make rule parameter optional or provide helper for custom validators"
+      }
+    ],
+    "tests_passed": "204/220 (93% passing, 16 failing)",
+    "fix_request_file": "QA_FIX_REQUEST.md",
+    "report_file": "qa_report.md"
   },
   "metadata": {
     "estimated_complexity": "medium",
