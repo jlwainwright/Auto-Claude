@@ -52,6 +52,9 @@ from .rules import (
     list_rule_ids,
 )
 
+# Main validation hook
+from .hook import output_validation_hook, reset_hook
+
 __all__ = [
     # Enums
     "SeverityLevel",
@@ -77,4 +80,7 @@ __all__ = [
     "get_rule_by_id",
     "list_rule_categories",
     "list_rule_ids",
+    # Main hook
+    "output_validation_hook",
+    "reset_hook",
 ]
