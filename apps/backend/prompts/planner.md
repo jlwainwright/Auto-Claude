@@ -159,6 +159,134 @@ This contains:
 
 ---
 
+## PHASE 1.5: ANALYZE DEPENDENCY GRAPH (IF AVAILABLE)
+
+**IMPORTANT**: If the project has a dependency graph available, use it to optimize your implementation plan.
+
+### Check for Dependency Graph
+
+```bash
+# Check if dependency graph exists in the spec directory
+ls -la dependency_graph.json 2>/dev/null && echo "Graph found" || echo "No graph"
+```
+
+### What is the Dependency Graph?
+
+The dependency graph is a JSON file that maps:
+- **File-level dependencies**: Which files import from which other files
+- **Dependency direction**: A → B means A depends on B (A imports from B)
+- **Impact metrics**: How many files depend on each file (fan-in) and how many each file depends on (fan-out)
+
+### Reading the Graph
+
+If `dependency_graph.json` exists, read it:
+
+```bash
+cat dependency_graph.json | head -100
+```
+
+Look for:
+- `files`: Map of file paths to their metadata
+- `dependencies`: Map of file dependencies (A depends on B)
+- `high_impact_files`: Files with many dependents that require careful changes
+
+### Using the Graph for Subtask Ordering
+
+**Rule #1: Modify dependencies before dependents**
+
+If file A depends on file B (A → B), and you need to modify both:
+- **Modify B first** (the dependency)
+- **Then modify A** (the dependent)
+
+Example:
+```
+frontend/components/UserDashboard.tsx → frontend/api/users.ts → backend/models/user.py
+```
+
+If all three files need changes, order them:
+1. `backend/models/user.py` (bottom-level dependency)
+2. `frontend/api/users.ts` (depends on models)
+3. `frontend/components/UserDashboard.tsx` (depends on API)
+
+**Why**: If you modify A before B, A might import functions/types that don't exist in B yet, causing import errors.
+
+### Identifying High-Impact Files
+
+High-impact files are files that many other files depend on (high fan-in). These require extra care:
+
+```bash
+# Check for high_impact_files section in the graph
+cat dependency_graph.json | jq '.high_impact_files' 2>/dev/null
+```
+
+**Characteristics of high-impact files**:
+- Core models (e.g., `backend/models/user.py`)
+- Base classes (e.g., `frontend/components/base/Component.tsx`)
+- Utility modules (e.g., `backend/utils/auth.py`)
+- API clients (e.g., `frontend/api/client.ts`)
+
+**Planning for high-impact files**:
+1. **Assign to earlier subtasks** - Get them done first so dependents can use them
+2. **Add more careful verification** - These files breaking affects many parts of the codebase
+3. **Consider splitting** - If the change is large, break into multiple smaller subtasks
+4. **Add notes** - Mark subtasks modifying high-impact files with extra care instructions
+
+### Suggesting Parallel-Safe Groupings
+
+The dependency graph helps identify which subtasks can run in parallel safely:
+
+**Parallel-safe subtasks**:
+1. **Operate on independent file sets** - No shared files between subtasks
+2. **Respect service boundaries** - Backend vs frontend vs worker (different services)
+3. **Have no dependency chain** - Don't require outputs from each other
+
+**Example of parallel-safe grouping**:
+```
+Group 1 (can run in parallel):
+  - subtask-1-1: Modify backend/models/user.py
+  - subtask-2-1: Modify frontend/components/Header.tsx
+  (No dependency between backend models and frontend Header)
+
+Group 2 (must wait for Group 1):
+  - subtask-3-1: Modify backend/api/users.py (depends on backend/models/user.py)
+  - subtask-4-1: Modify frontend/pages/UserProfile.tsx (depends on backend/api/users.py)
+```
+
+**When analyzing parallelism**:
+1. **Map subtasks to files** - Which files each subtask modifies
+2. **Check dependency chains** - Do any files depend on others being modified?
+3. **Group by service** - Backend, frontend, worker tasks can often run in parallel
+4. **Mark phases as parallel_safe** - Set `parallel_safe: true` in the phase definition
+
+### Integration with implementation_plan.json
+
+When creating subtasks, use the dependency graph to inform:
+
+```json
+{
+  "id": "subtask-1-1",
+  "description": "Modify backend/models/user.py (HIGH IMPACT: 15 dependents)",
+  "service": "backend",
+  "files_to_modify": ["backend/models/user.py"],
+  "impact_level": "high",
+  "notes": "This file is imported by 15 other files. Changes must preserve existing API.",
+  "verification": {
+    "type": "command",
+    "command": "pytest tests/test_models.py -v",
+    "expected": "All tests pass"
+  }
+}
+```
+
+### If No Dependency Graph Exists
+
+If the project doesn't have a dependency graph:
+1. **Proceed with manual analysis** - Use your Phase 0 investigation to identify dependencies
+2. **Document assumptions** - Note in context.json which files you think depend on others
+3. **Order conservatively** - Default to modifying lower-level files first (models → API → UI)
+
+---
+
 ## PHASE 2: UNDERSTAND THE WORKFLOW TYPE
 
 The spec defines a workflow type. Each type has a different phase structure:

@@ -21,7 +21,7 @@ def serialize_context(context: TaskContext) -> dict:
     Returns:
         Dictionary representation
     """
-    return {
+    result = {
         "task_description": context.task_description,
         "scoped_services": context.scoped_services,
         "files_to_modify": context.files_to_modify,
@@ -30,6 +30,18 @@ def serialize_context(context: TaskContext) -> dict:
         "service_contexts": context.service_contexts,
         "graph_hints": context.graph_hints,
     }
+
+    # Add enhanced analysis data if available
+    if context.codebase_graph_summary is not None:
+        result["codebase_graph_summary"] = context.codebase_graph_summary
+    if context.architecture_patterns is not None:
+        result["architecture_patterns"] = context.architecture_patterns
+    if context.service_boundaries is not None:
+        result["service_boundaries"] = context.service_boundaries
+    if context.file_dependencies is not None:
+        result["file_dependencies"] = context.file_dependencies
+
+    return result
 
 
 def save_context(context: TaskContext, output_file: Path) -> None:

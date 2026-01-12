@@ -1,0 +1,60 @@
+{
+  "codebase_graph": {
+    "nodes": [],
+    "edges": [],
+    "metrics": {
+      "total_files": 0,
+      "total_dependencies": 0,
+      "total_functions": 0,
+      "total_classes": 0,
+      "average_complexity": 0.0,
+      "max_complexity": 0.0,
+      "circular_dependencies": 0,
+      "orphan_files": 0,
+      "average_coupling": 0.0,
+      "highly_coupled_files": 0,
+      "critical_files": [],
+      "language_distribution": {},
+      "service_count": 0,
+      "microservice_indicators": []
+    },
+    "architecture_pattern": "unknown",
+    "service_boundaries": {},
+    "project_dir": "",
+    "analyzed_at": "",
+    "graph_hash": "",
+    "analyzer_version": "1.0.0"
+  },
+  "architecture_analysis": {
+    "primary_pattern": {
+      "pattern": "unknown",
+      "confidence_score": 0.0,
+      "indicators": [],
+      "description": "",
+      "strengths": [],
+      "concerns": [],
+      "detected_layers": {},
+      "service_count": 0,
+      "independent_deployables": []
+    },
+    "secondary_patterns": [],
+    "services": [],
+    "service_relationships": {},
+    "cohesion_score": 0.0,
+    "coupling_score": 0.0,
+    "modularity_score": 0.0,
+    "analyzed_at": "",
+    "analyzer_version": "1.0.0",
+    "project_dir": ""
+  },
+  "analysis_timestamp": "2026-01-11T19:39:17.114862",
+  "project_hash": "",
+  "analyzer_version": "2.0.0",
+  "project_dir": ".",
+  "total_files_analyzed": 0,
+  "analysis_duration_seconds": 0.0,
+  "cache_key": "",
+  "is_cached": true,
+  "cache_hit": false,
+  "file_modification_times": {}
+}
