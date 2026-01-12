@@ -147,6 +147,7 @@ from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from providers.openai_compat import OpenAICompatClient
 from security import bash_security_hook
+from security.output_validation import output_validation_hook
 
 
 def _map_zhipuai_model(model: str) -> str:
@@ -884,6 +885,11 @@ def create_client(
         "mcp_servers": mcp_servers,
         "hooks": {
             "PreToolUse": [
+                # Output validation hook - checks for dangerous patterns across all tools
+                # Runs first to catch malicious operations before allowlist validation
+                HookMatcher(matcher="*", hooks=[output_validation_hook]),
+                # Bash security hook - validates commands against project allowlist
+                # Runs after output validation for defense in depth
                 HookMatcher(matcher="Bash", hooks=[bash_security_hook]),
             ],
         },

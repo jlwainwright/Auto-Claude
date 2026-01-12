@@ -3,20 +3,31 @@ Security Module for Auto-Build Framework
 =========================================
 
 Provides security validation for bash commands using dynamic allowlists
-based on project analysis.
+based on project analysis, plus comprehensive output validation for all
+agent tool calls.
 
-The security system has three layers:
+The security system has multiple layers:
 1. Base commands - Always allowed (core shell utilities)
 2. Stack commands - Detected from project structure (frameworks, languages)
 3. Custom commands - User-defined allowlist
+4. Output validation - Pattern-based detection of dangerous operations
 
 Public API
 ----------
-Main functions:
+Bash command validation:
 - bash_security_hook: Pre-tool-use hook for command validation
 - validate_command: Standalone validation function for testing
 - get_security_profile: Get or create security profile for a project
 - reset_profile_cache: Reset cached security profile
+
+Output validation:
+- output_validation_hook: Pre-tool-use hook for all tool output validation
+- get_validation_config: Load validation configuration for a project
+- generate_override_token: Create override token for bypassing rules
+- validate_override_token: Check if an override token is valid
+- use_override_token: Use an override token
+- revoke_override_token: Revoke an override token
+- list_override_tokens: List all override tokens
 
 Command parsing:
 - extract_commands: Extract command names from shell strings
@@ -56,6 +67,42 @@ from .tool_input_validator import (
     validate_tool_input,
 )
 
+# Output validation system
+from .output_validation import (
+    # Main hook
+    output_validation_hook,
+    # Configuration loading
+    get_validation_config,
+    load_validation_config,
+    clear_config_cache,
+    get_config_file_path,
+    # Override token management
+    generate_override_token,
+    validate_override_token,
+    use_override_token,
+    validate_and_use_override_token,
+    revoke_override_token,
+    list_override_tokens,
+    cleanup_expired_tokens,
+    # Enums and models
+    SeverityLevel,
+    ValidationResult,
+    ValidationRule,
+    OutputValidationConfig,
+    OverrideToken,
+    # Event logging
+    log_blocked_operation,
+    log_warning,
+    log_override_used,
+    # Report generation
+    generate_validation_report,
+    generate_and_save_report,
+    print_validation_summary,
+    # Message formatting
+    format_block_message,
+    format_short_block_message,
+)
+
 # Validators (for advanced usage)
 from .validator import (
     VALIDATORS,
@@ -78,11 +125,25 @@ from .validator import (
 )
 
 __all__ = [
-    # Main API
+    # Main API - Bash security
     "bash_security_hook",
     "validate_command",
     "get_security_profile",
     "reset_profile_cache",
+    # Main API - Output validation
+    "output_validation_hook",
+    "get_validation_config",
+    "load_validation_config",
+    "clear_config_cache",
+    "get_config_file_path",
+    # Override token management
+    "generate_override_token",
+    "validate_override_token",
+    "use_override_token",
+    "validate_and_use_override_token",
+    "revoke_override_token",
+    "list_override_tokens",
+    "cleanup_expired_tokens",
     # Parsing utilities
     "extract_commands",
     "split_command_segments",
@@ -113,4 +174,21 @@ __all__ = [
     # Tool input validation
     "validate_tool_input",
     "get_safe_tool_input",
+    # Output validation - Enums and models
+    "SeverityLevel",
+    "ValidationResult",
+    "ValidationRule",
+    "OutputValidationConfig",
+    "OverrideToken",
+    # Output validation - Event logging
+    "log_blocked_operation",
+    "log_warning",
+    "log_override_used",
+    # Output validation - Report generation
+    "generate_validation_report",
+    "generate_and_save_report",
+    "print_validation_summary",
+    # Output validation - Message formatting
+    "format_block_message",
+    "format_short_block_message",
 ]

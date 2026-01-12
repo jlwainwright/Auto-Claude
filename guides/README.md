@@ -7,6 +7,7 @@ Detailed documentation for Auto Claude setup and usage.
 | Guide | Description |
 |-------|-------------|
 | **[CLI-USAGE.md](CLI-USAGE.md)** | Terminal-only usage for power users, headless servers, and CI/CD |
+| **[output-validation.md](output-validation.md)** | Comprehensive guide to the output validation system, including configuration, default rules, override mechanism, and best practices |
 
 ## Quick Links
 
