@@ -528,4 +528,7 @@ export const IPC_CHANNELS = {
   ANOMALY_FIX_PROGRESS: 'anomaly:fix:progress',             // Progress update
   ANOMALY_FIX_COMPLETE: 'anomaly:fix:complete',             // Fix completed
   ANOMALY_FIX_ERROR: 'anomaly:fix:error',                   // Fix failed
+
+  // Recovery operations (agent crash recovery)
+  RECOVER_ORPHANED_STATUS: 'recovery:recoverOrphanedStatus', // Recover orphaned .auto-claude-status
 } as const;

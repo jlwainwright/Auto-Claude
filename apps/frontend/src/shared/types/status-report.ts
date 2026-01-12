@@ -11,6 +11,45 @@
 export type AnomalySeverity = 'error' | 'warning' | 'info';
 
 /**
+ * Supported anomaly types
+ *
+ * Status inconsistencies:
+ * - "qa_approved_status_not_done" - QA approved but status not done
+ * - "done_missing_qa_signoff" - Done but missing QA signoff
+ * - "done_but_incomplete_subtasks" - Done status but incomplete subtasks
+ *
+ * Pipeline issues:
+ * - "no_subtasks_in_plan" - Plan has 0 subtasks
+ * - "implementation_plan_unreadable" - Cannot read implementation_plan.json
+ * - "broken_pipeline" - 0 subtasks or stuck in human_review
+ * - "plan_schema_variant" - Schema drift from expected id/id format
+ *
+ * Stuck states (NEW):
+ * - "orphaned_active_status" - .auto-claude-status shows active but agent not running
+ * - "stuck_in_human_review" - Status human_review with 0 subtasks for >1 hour
+ * - "mismatched_active_spec" - .auto-claude-status references non-existent spec
+ * - "subtask_stuck_in_progress" - Subtask stuck in_progress for >2 hours
+ * - "plan_status_abandoned" - In_progress with no updates for >24 hours
+ * - "worker_count_mismatch" - .auto-claude-status shows active workers but no activity
+ *
+ * Roadmap issues:
+ * - "roadmap_out_of_sync" - Roadmap and spec status mismatch
+ * - "roadmap_link_missing" - No roadmap feature linked to spec
+ *
+ * Recovery signals:
+ * - "recovered_from_stuck" - Recovery note present
+ * - "qa_iteration_nonapproved" - Non-approved QA iterations exist
+ * - "qa_fix_request_present" - QA_FIX_REQUEST.md exists
+ *
+ * Drift detection:
+ * - "build_progress_status_mismatch" - build-progress.txt status != plan status
+ * - "build_progress_date_anomaly" - Date mismatch in build-progress.txt
+ * - "in_progress_zero_subtasks_done" - In_progress but 0 subtasks done
+ * - "in_progress_missing_logs" - In_progress but no logs exist
+ */
+export type AnomalyType = string;
+
+/**
  * Anomaly detected in a spec
  */
 export interface Anomaly {

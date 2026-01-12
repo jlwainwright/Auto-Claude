@@ -34,6 +34,7 @@ import { registerMcpHandlers } from './mcp-handlers';
 import { registerProfileHandlers } from './profile-handlers';
 import { registerStatusReportHandlers } from './status-report-handlers';
 import { registerAnomalyFixHandlers } from './anomaly-fix-handlers';
+import { registerRecoveryHandlers } from './recovery-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
 import { notificationService } from '../notification-service';
 
@@ -126,6 +127,9 @@ export function setupIpcHandlers(
   // Anomaly Fix handlers (AI-powered anomaly resolution)
   registerAnomalyFixHandlers();
 
+  // Recovery handlers (agent crash recovery)
+  registerRecoveryHandlers();
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -154,5 +158,6 @@ export {
   registerMcpHandlers,
   registerProfileHandlers,
   registerStatusReportHandlers,
-  registerAnomalyFixHandlers
+  registerAnomalyFixHandlers,
+  registerRecoveryHandlers
 };

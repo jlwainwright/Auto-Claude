@@ -182,6 +182,47 @@ You are an expert Python developer and Auto-Claude specialist. Your task is to a
 - Identify which artifacts should exist
 - Create missing files or update spec state
 """,
+        "orphaned_active_status": """
+**Orphaned Active Status**: .auto-claude-status shows active=true but agent is not running.
+- Read .auto-claude-status to verify the stuck state
+- Update .auto-claude-status: set active=false, state=failed
+- Add recovery_note to implementation_plan.json documenting the crash
+- This allows the user to restart the spec from the beginning
+""",
+        "stuck_in_human_review": """
+**Stuck in Human Review**: Status is human_review with 0 subtasks for >1 hour.
+- The planning phase likely failed to generate subtasks
+- Check if planner agent encountered errors
+- Consider re-running the planning phase
+- Update status to 'pending' to allow restart
+""",
+        "mismatched_active_spec": """
+**Mismatched Active Spec**: .auto-claude-status references a non-existent spec.
+- The .auto-claude-status file is pointing to a deleted or invalid spec
+- Clear the .auto-claude-status file or update to point to a valid spec
+- Set .auto-claude-status.active to false
+""",
+        "subtask_stuck_in_progress": """
+**Subtask Stuck in Progress**: A subtask has been in_progress for >2 hours.
+- The coder agent may have crashed or timed out on this subtask
+- Check task_logs.json for errors
+- Consider resetting the subtask status to 'pending' to allow retry
+- Document the stuck state in recovery_note
+""",
+        "plan_status_abandoned": """
+**Plan Status Abandoned**: Status is in_progress but no updates for >24 hours.
+- The build appears to be abandoned or stuck
+- Check if there are any active agent processes
+- Consider updating status to 'failed' to allow restart
+- Add recovery_note documenting the abandonment
+""",
+        "worker_count_mismatch": """
+**Worker Count Mismatch**: .auto-claude-status shows active workers but no activity.
+- The worker count is inconsistent with actual activity
+- This may indicate a stale .auto-claude-status file
+- Verify if workers are actually running
+- Update .auto-claude-status.workers.active to 0 if no processes found
+""",
     }
 
     if anomaly_type in guidance_map:

@@ -15,13 +15,22 @@ import {
   X,
   Terminal,
   Minus,
-  Maximize2
+  Maximize2,
+  Filter,
+  Clock,
+  History
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu';
 import {
   Collapsible,
   CollapsibleContent,
@@ -106,6 +115,30 @@ const getFixStatusLabel = (status: FixStatus): string => {
   }
 };
 
+// NEW: Get worst severity from a list of anomalies
+const getWorstSeverity = (anomalies: Anomaly[]): AnomalySeverity | null => {
+  if (anomalies.length === 0) return null;
+  if (anomalies.some(a => a.severity === 'error')) return 'error';
+  if (anomalies.some(a => a.severity === 'warning')) return 'warning';
+  if (anomalies.some(a => a.severity === 'info')) return 'info';
+  return null;
+};
+
+// NEW: Get border class based on worst anomaly severity
+const getRowBorderClass = (anomalies: Anomaly[]): string => {
+  const worst = getWorstSeverity(anomalies);
+  if (worst === 'error') return 'border-l-4 border-l-destructive';
+  if (worst === 'warning') return 'border-l-4 border-l-yellow-500';
+  if (worst === 'info') return 'border-l-4 border-l-blue-500';
+  return '';
+};
+
+// NEW: Filter anomalies by severity
+const filterAnomalies = (anomalies: Anomaly[], filter: 'all' | 'error' | 'warning' | 'info' | null | undefined): Anomaly[] => {
+  if (!filter || filter === 'all') return anomalies;
+  return anomalies.filter(a => a.severity === filter);
+};
+
 // Spec row component with collapsible anomalies and fix buttons
 interface SpecRowProps {
   spec: SpecStatusRow;
@@ -118,9 +151,10 @@ interface SpecRowProps {
 function SpecRow({ spec, projectId, activeFixes, onStartFix, onViewLogs }: SpecRowProps) {
   const [expanded, setExpanded] = useState(false);
   const hasAnomalies = spec.anomalies.length > 0;
+  const borderClass = getRowBorderClass(spec.anomalies);
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className={cn("border rounded-lg overflow-hidden", borderClass)}>
       <Collapsible open={expanded} onOpenChange={setExpanded}>
         <CollapsibleTrigger className="w-full">
           <div
@@ -276,7 +310,13 @@ function SpecRow({ spec, projectId, activeFixes, onStartFix, onViewLogs }: SpecR
 }
 
 // Summary cards component
-function SummaryCards({ report }: { report: StatusReport }) {
+function SummaryCards({
+  report,
+  onBulkFix
+}: {
+  report: StatusReport;
+  onBulkFix?: (severity: 'error' | 'warning' | 'info') => void;
+}) {
   const { summary } = report;
   const errorCount = summary.anomaly_severity_counts.error || 0;
   const warningCount = summary.anomaly_severity_counts.warning || 0;
@@ -292,8 +332,21 @@ function SummaryCards({ report }: { report: StatusReport }) {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2">
-          <CardDescription>Errors</CardDescription>
+        <CardHeader className="pb-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <CardDescription>Errors</CardDescription>
+            {onBulkFix && errorCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => onBulkFix('error')}
+              >
+                <Wand2 className="h-3 w-3 mr-1" />
+                Fix All
+              </Button>
+            )}
+          </div>
           <CardTitle className={cn("text-2xl", errorCount > 0 && "text-destructive")}>
             {errorCount}
           </CardTitle>
@@ -301,8 +354,21 @@ function SummaryCards({ report }: { report: StatusReport }) {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2">
-          <CardDescription>Warnings</CardDescription>
+        <CardHeader className="pb-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <CardDescription>Warnings</CardDescription>
+            {onBulkFix && warningCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => onBulkFix('warning')}
+              >
+                <Wand2 className="h-3 w-3 mr-1" />
+                Fix All
+              </Button>
+            )}
+          </div>
           <CardTitle className={cn("text-2xl", warningCount > 0 && "text-yellow-600")}>
             {warningCount}
           </CardTitle>
@@ -310,8 +376,21 @@ function SummaryCards({ report }: { report: StatusReport }) {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2">
-          <CardDescription>Info</CardDescription>
+        <CardHeader className="pb-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <CardDescription>Info</CardDescription>
+            {onBulkFix && infoCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => onBulkFix('info')}
+              >
+                <Wand2 className="h-3 w-3 mr-1" />
+                Fix All
+              </Button>
+            )}
+          </div>
           <CardTitle className="text-2xl text-blue-600">{infoCount}</CardTitle>
         </CardHeader>
       </Card>
@@ -361,11 +440,15 @@ function StatusBreakdown({ report }: { report: StatusReport }) {
 // Anomaly type breakdown with fix buttons
 function AnomalyBreakdown({
   report,
+  severityFilter,
+  onSetFilter,
   activeFixes,
   onStartFix,
   onViewLogs
 }: {
   report: StatusReport;
+  severityFilter?: 'all' | 'error' | 'warning' | 'info';
+  onSetFilter?: (filter: 'all' | 'error' | 'warning' | 'info') => void;
   activeFixes: Map<string, AnomalyFixState>;
   onStartFix: (spec: SpecStatusRow, anomaly: Anomaly) => void;
   onViewLogs: (fixId: string) => void;
@@ -384,9 +467,14 @@ function AnomalyBreakdown({
     allAnomalies.push(...spec.anomalies);
   }
 
+  // Apply filter if specified
+  const filteredAnomalies = severityFilter && severityFilter !== 'all'
+    ? allAnomalies.filter(a => a.severity === severityFilter)
+    : allAnomalies;
+
   // Group by type
   const byType: Record<string, Anomaly[]> = {};
-  for (const anomaly of allAnomalies) {
+  for (const anomaly of filteredAnomalies) {
     if (!byType[anomaly.type]) {
       byType[anomaly.type] = [];
     }
@@ -398,8 +486,28 @@ function AnomalyBreakdown({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Anomalies by Type</CardTitle>
-        <CardDescription>Grouped detection results</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Anomalies by Type</CardTitle>
+            <CardDescription>Grouped detection results</CardDescription>
+          </div>
+          {onSetFilter && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Filter className="h-4 w-4 mr-2" />
+                  {severityFilter === 'all' ? 'All' : severityFilter === 'error' ? 'Errors' : severityFilter === 'warning' ? 'Warnings' : 'Info'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onSetFilter('all')}>All Anomalies</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onSetFilter('error')}>Errors Only</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onSetFilter('warning')}>Warnings Only</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onSetFilter('info')}>Info Only</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {sortedTypes.map(([type, anomalies]) => {
@@ -522,6 +630,47 @@ export function StatusReportPage({ projectId }: StatusReportPageProps) {
   const [logPanelExpanded, setLogPanelExpanded] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  // NEW: Anomaly filter state
+  const [severityFilter, setSeverityFilter] = useState<'all' | 'error' | 'warning' | 'info'>('all');
+
+  // NEW: Fix history state with localStorage persistence
+  const [fixHistory, setFixHistory] = useState<AnomalyFixState[]>([]);
+
+  // Load fix history from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('auto-claude-fix-history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setFixHistory(parsed);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load fix history:', err);
+    }
+  }, []);
+
+  // Save fix history to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      const completedFixes = Array.from(activeFixes.values()).filter(
+        fix => fix.status === 'completed' || fix.status === 'failed'
+      );
+      const historyToSave = [...fixHistory, ...completedFixes]
+        .sort((a, b) => {
+          const aTime = new Date(a.endTime || a.startTime).getTime();
+          const bTime = new Date(b.endTime || b.startTime).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 50); // Keep only the last 50 fixes
+      localStorage.setItem('auto-claude-fix-history', JSON.stringify(historyToSave));
+      setFixHistory(historyToSave);
+    } catch (err) {
+      console.warn('Failed to save fix history:', err);
+    }
+  }, [activeFixes]);
+
   // Load report
   const loadReport = useCallback(async () => {
     setIsLoading(true);
@@ -561,6 +710,50 @@ export function StatusReportPage({ projectId }: StatusReportPageProps) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }, [projectId]);
+
+  // NEW: Bulk fix handler - fixes all errors (or filtered anomalies) in parallel
+  const handleBulkFix = useCallback(async (severity: 'error' | 'warning' | 'info' = 'error') => {
+    if (!report) return;
+
+    // Collect all anomalies of the specified severity
+    const anomaliesToFix: Array<{ spec: SpecStatusRow; anomaly: Anomaly }> = [];
+    for (const spec of report.specs) {
+      const filteredAnomalies = spec.anomalies.filter(a => a.severity === severity);
+      for (const anomaly of filteredAnomalies) {
+        anomaliesToFix.push({ spec, anomaly });
+      }
+    }
+
+    if (anomaliesToFix.length === 0) {
+      setError(`No ${severity} anomalies found to fix`);
+      return;
+    }
+
+    // Start fixes in parallel (with a small delay between each to avoid overwhelming the system)
+    for (const { spec, anomaly } of anomaliesToFix) {
+      try {
+        const result = await window.electronAPI.startFix({
+          projectId,
+          specId: spec.spec_id,
+          anomaly,
+          specContext: spec
+        });
+
+        if (result.success && result.data) {
+          // Auto-expand log panel for the first fix
+          if (anomaliesToFix.length === 1) {
+            setSelectedFixId(result.data.fixId);
+            setLogPanelExpanded(true);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to start fix for', spec.spec_id, anomaly.type, err);
+      }
+
+      // Small delay between fixes
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }, [projectId, report]);
 
   // Cancel fix
   const handleCancelFix = useCallback(async (fixId: string) => {
@@ -755,12 +948,14 @@ export function StatusReportPage({ projectId }: StatusReportPageProps) {
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4 mt-4">
-                  <SummaryCards report={report} />
+                  <SummaryCards report={report} onBulkFix={handleBulkFix} />
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <StatusBreakdown report={report} />
                     <AnomalyBreakdown
                       report={report}
+                      severityFilter={severityFilter}
+                      onSetFilter={setSeverityFilter}
                       activeFixes={activeFixes}
                       onStartFix={handleStartFix}
                       onViewLogs={handleViewLogs}
@@ -778,6 +973,54 @@ export function StatusReportPage({ projectId }: StatusReportPageProps) {
                             : 'Linked to roadmap'}
                         </CardDescription>
                       </CardHeader>
+                    </Card>
+                  )}
+
+                  {/* NEW: Fix History panel */}
+                  {fixHistory.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <div className="flex items-center gap-2">
+                          <History className="h-4 w-4" />
+                          <CardTitle>Fix History</CardTitle>
+                        </div>
+                        <CardDescription>
+                          Recent fix attempts (stored locally)
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {fixHistory.slice(0, 10).map((fix) => (
+                            <div
+                              key={fix.fixId}
+                              className={cn(
+                                "flex items-center justify-between p-2 rounded border",
+                                "hover:bg-muted/50 transition-colors"
+                              )}
+                            >
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <Badge variant="outline" className={cn("text-xs", getFixStatusColor(fix.status))}>
+                                  {getFixStatusLabel(fix.status)}
+                                </Badge>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium truncate">
+                                    {fix.anomaly?.type || 'Unknown'}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {fix.specId}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {fix.endTime
+                                  ? new Date(fix.endTime).toLocaleDateString()
+                                  : new Date(fix.startTime).toLocaleDateString()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
                     </Card>
                   )}
                 </TabsContent>

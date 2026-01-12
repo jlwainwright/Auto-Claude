@@ -18,7 +18,9 @@ from core.auth import get_auth_token, get_auth_token_source
 from core.dependency_validator import validate_platform_dependencies
 from core.provider_config import (
     get_openai_compat_config,
+    get_zhipuai_api_key,
     is_claude_provider,
+    is_zhipuai_provider,
     normalize_provider,
 )
 
@@ -186,7 +188,32 @@ def validate_environment(spec_dir: Path, provider: str | None = None) -> bool:
             base_url = os.environ.get("ANTHROPIC_BASE_URL")
             if base_url:
                 print(f"API Endpoint: {base_url}")
+    elif is_zhipuai_provider(provider_id):
+        # Check for Z.AI API key
+        try:
+            api_key = get_zhipuai_api_key(provider_id)
+            print(f"Provider: {provider_id}")
+            # Show base URL if set
+            base_url = (
+                os.environ.get("ZAI_BASE_URL")
+                or os.environ.get("GLM_BASE_URL")
+                or "https://open.bigmodel.cn/api/anthropic"
+            )
+            print(f"API Endpoint: {base_url}")
+        except ValueError as e:
+            print("Error: Missing Z.AI API key")
+            print("\nZ.AI provider requires an API key to be configured.")
+            print("\nTo configure Z.AI credentials:")
+            print("  1. Set environment variable:")
+            print("     export ZAI_API_KEY=your-api-key")
+            print("\n  2. Or configure in Frontend Settings:")
+            print("     Settings → Integrations → Z.AI API Key")
+            print("\nAlternative environment variable names:")
+            print("  - ZHIPUAI_API_KEY")
+            print("  - GLM_API_KEY")
+            valid = False
     else:
+        # Generic OpenAI-compatible provider
         try:
             provider_cfg = get_openai_compat_config(provider_id)
             print(f"Provider: {provider_cfg.provider}")
@@ -194,6 +221,14 @@ def validate_environment(spec_dir: Path, provider: str | None = None) -> bool:
                 print(f"API Endpoint: {provider_cfg.base_url}")
         except ValueError as e:
             print(f"Error: {e}")
+            print(f"\nProvider '{provider_id}' requires API credentials.")
+            print("\nTo configure credentials:")
+            print("  1. Set environment variable:")
+            if provider_id == "openai":
+                print("     export OPENAI_API_KEY=your-api-key")
+            else:
+                print(f"     export {provider_id.upper()}_API_KEY=your-api-key")
+            print("\n  2. Or configure in Frontend Settings if supported.")
             valid = False
 
     # Check for spec.md in spec directory

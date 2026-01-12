@@ -193,6 +193,7 @@ def _flatten_subtasks(plan: dict[str, Any]) -> list[dict[str, Any]]:
                     or st.get("file_path")
                     or st.get("files_to_modify")
                     or st.get("files_to_create"),
+                    "updated_at": _norm(st.get("updated_at") or st.get("timestamp")),
                 }
             )
     return tasks
@@ -247,10 +248,52 @@ def _parse_build_progress(build_progress_text: str) -> dict[str, Any]:
     }
 
 
+def _read_auto_claude_status_file(auto_claude_dir: Path) -> Optional[dict[str, Any]]:
+    """Read and parse the .auto-claude-status file from the auto-claude directory."""
+    status_path = auto_claude_dir / ".auto-claude-status"
+    if not status_path.exists():
+        return None
+    data, _ = _read_json_file(status_path)
+    return data
+
+
+def _get_time_since_update(updated_at_str: str) -> Optional[float]:
+    """Get hours since a timestamp string."""
+    dt = _parse_iso_datetime(updated_at_str)
+    if dt is None:
+        return None
+    now = datetime.now(timezone.utc)
+    delta = now - dt
+    return delta.total_seconds() / 3600  # Return hours
+
+
+def _check_stuck_subtasks(tasks: list[dict[str, Any]], stale_hours: float = 2.0) -> list[dict[str, Any]]:
+    """Find subtasks that have been in_progress for too long."""
+    stuck = []
+    for task in tasks:
+        if _norm(task.get("status")) == "in_progress":
+            updated_at = _norm(task.get("updated_at") or task.get("timestamp"))
+            if updated_at:
+                hours = _get_time_since_update(updated_at)
+                if hours is not None and hours > stale_hours:
+                    stuck.append({
+                        "subtask": task.get("id") or task.get("subtask_id") or "unknown",
+                        "title": task.get("title") or "",
+                        "hours_stuck": round(hours, 1)
+                    })
+    return stuck
+
+
 def generate_report(auto_claude_dir: Path) -> dict[str, Any]:
     auto_claude_dir = auto_claude_dir.resolve()
     specs_dir = auto_claude_dir / "specs"
     roadmap_path = auto_claude_dir / "roadmap" / "roadmap.json"
+
+    # Read .auto-claude-status file for orphaned status detection
+    status_file = _read_auto_claude_status_file(auto_claude_dir)
+    active_spec_id = _norm(status_file.get("spec")) if status_file else ""
+    is_building = status_file.get("state") == "building" if status_file else False
+    is_active = status_file.get("active") is True if status_file else False
 
     roadmap: dict[str, Any] = {}
     roadmap_features_by_spec: dict[str, dict[str, Any]] = {}
@@ -517,6 +560,93 @@ def generate_report(auto_claude_dir: Path) -> dict[str, Any]:
                                 type="build_progress_date_anomaly",
                                 severity="info",
                                 detail=f"build-progress.txt created '{bp_created}' differs from plan created_at '{created_at}' by ~{delta_days} days",
+                            )
+                        )
+
+        # ===== NEW ANOMALY DETECTION =====
+        # Detect stuck states and orphaned status
+
+        # Anomaly: orphaned_active_status - .auto-claude-status shows active=true but spec may be orphaned
+        if is_active and is_building and active_spec_id == spec_dir.name:
+            # Check if the spec appears stuck (e.g., in_progress but no recent updates)
+            if status.lower() == "in_progress" and updated_at:
+                hours_since_update = _get_time_since_update(updated_at)
+                if hours_since_update is not None and hours_since_update > 4:
+                    anomalies.append(
+                        Anomaly(
+                            type="orphaned_active_status",
+                            severity="error",
+                            detail=f".auto-claude-status shows active=true for '{spec_dir.name}' but no updates for {hours_since_update:.1f} hours (agent may have crashed)",
+                        )
+                    )
+
+        # Anomaly: stuck_in_human_review - status is human_review with 0 subtasks for >1 hour
+        if status.lower() == "human_review" and total == 0:
+            if updated_at:
+                hours_since_update = _get_time_since_update(updated_at)
+                if hours_since_update is not None and hours_since_update > 1:
+                    anomalies.append(
+                        Anomaly(
+                            type="stuck_in_human_review",
+                            severity="error",
+                            detail=f"Status is human_review with 0 subtasks for {hours_since_update:.1f} hours (planner may have failed)",
+                        )
+                    )
+
+        # Anomaly: mismatched_active_spec - .auto-claude-status references a non-existent spec
+        if is_active and is_building and active_spec_id:
+            # Check if the active spec exists
+            active_spec_exists = any(s.name == active_spec_id for s in specs_dir.iterdir() if s.is_dir())
+            if not active_spec_exists and spec_dir.name == active_spec_id:
+                # This is the last iteration and the active spec doesn't exist
+                pass  # Will be caught in the check below
+            elif spec_dir.name == active_spec_id and not active_spec_exists:
+                anomalies.append(
+                    Anomaly(
+                        type="mismatched_active_spec",
+                        severity="warning",
+                        detail=f".auto-claude-status references spec '{active_spec_id}' which doesn't exist in specs directory",
+                    )
+                )
+
+        # Anomaly: subtask_stuck_in_progress - subtask has been in_progress for >2 hours
+        stuck_subtasks = _check_stuck_subtasks(tasks, stale_hours=2.0)
+        if stuck_subtasks:
+            for stuck in stuck_subtasks:
+                anomalies.append(
+                    Anomaly(
+                        type="subtask_stuck_in_progress",
+                        severity="warning",
+                        detail=f"Subtask '{stuck['subtask']}' ({stuck.get('title', '')}) stuck in_progress for {stuck['hours_stuck']} hours",
+                    )
+                )
+
+        # Anomaly: plan_status_abandoned - status is in_progress but no updates for >24 hours
+        if status.lower() == "in_progress" and updated_at:
+            hours_since_update = _get_time_since_update(updated_at)
+            if hours_since_update is not None and hours_since_update > 24:
+                anomalies.append(
+                    Anomaly(
+                        type="plan_status_abandoned",
+                        severity="error",
+                        detail=f"Status is in_progress but no updates for {hours_since_update:.1f} hours (build may be abandoned)",
+                    )
+                )
+
+        # Anomaly: worker_count_mismatch - .auto-claude-status shows active workers but no activity
+        if status_file and is_active and is_building:
+            workers = status_file.get("workers", {})
+            active_workers = workers.get("active", 0)
+            if active_workers > 0 and status.lower() == "in_progress":
+                # Check if there's been recent activity
+                if updated_at:
+                    hours_since_update = _get_time_since_update(updated_at)
+                    if hours_since_update is not None and hours_since_update > 2:
+                        anomalies.append(
+                            Anomaly(
+                                type="worker_count_mismatch",
+                                severity="warning",
+                                detail=f".auto-claude-status shows {active_workers} active workers but no updates for {hours_since_update:.1f} hours",
                             )
                         )
 

@@ -771,79 +771,98 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="globalOpenAIKey" className="text-sm font-medium text-foreground">
-                {t('integrations.openaiKey')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {t('integrations.openaiKeyDescription')}
-              </p>
-              <div className="relative max-w-lg">
-                <Input
-                  id="globalOpenAIKey"
-                  type={showGlobalOpenAIKey ? 'text' : 'password'}
-                  placeholder="sk-..."
-                  value={settings.globalOpenAIApiKey || ''}
-                  onChange={(e) =>
-                    onSettingsChange({ ...settings, globalOpenAIApiKey: e.target.value || undefined })
-                  }
-                  className="pr-10 font-mono text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowGlobalOpenAIKey(!showGlobalOpenAIKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showGlobalOpenAIKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+          <div className="space-y-6">
+            {/* OpenAI Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Key className="h-4 w-4 text-muted-foreground" />
+                <h4 className="text-sm font-semibold text-foreground">OpenAI</h4>
+              </div>
+              <div className="rounded-lg bg-muted/30 border border-border p-4">
+                <div className="space-y-2">
+                  <Label htmlFor="globalOpenAIKey" className="text-sm font-medium text-foreground">
+                    {t('integrations.openaiKey')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('integrations.openaiKeyDescription')}
+                  </p>
+                  <div className="relative max-w-lg">
+                    <Input
+                      id="globalOpenAIKey"
+                      type={showGlobalOpenAIKey ? 'text' : 'password'}
+                      placeholder="sk-..."
+                      value={settings.globalOpenAIApiKey || ''}
+                      onChange={(e) =>
+                        onSettingsChange({ ...settings, globalOpenAIApiKey: e.target.value || undefined })
+                      }
+                      className="pr-10 font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGlobalOpenAIKey(!showGlobalOpenAIKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showGlobalOpenAIKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="globalZaiKey" className="text-sm font-medium text-foreground">
-                {t('integrations.zaiKey')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {t('integrations.zaiKeyDescription')}
-              </p>
-              <div className="relative max-w-lg">
-                <Input
-                  id="globalZaiKey"
-                  type={showGlobalZaiKey ? 'text' : 'password'}
-                  placeholder="zai-..."
-                  value={settings.globalZaiApiKey || ''}
-                  onChange={(e) =>
-                    onSettingsChange({ ...settings, globalZaiApiKey: e.target.value || undefined })
-                  }
-                  className="pr-10 font-mono text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowGlobalZaiKey(!showGlobalZaiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showGlobalZaiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+
+            {/* Z.AI Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Key className="h-4 w-4 text-muted-foreground" />
+                <h4 className="text-sm font-semibold text-foreground">Z.AI</h4>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="globalZaiBaseUrl" className="text-sm font-medium text-foreground">
-                {t('integrations.zaiBaseUrl')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {t('integrations.zaiBaseUrlDescription')}
-              </p>
-              <div className="max-w-lg">
-                <Input
-                  id="globalZaiBaseUrl"
-                  type="text"
-                  placeholder="https://api.z.ai/api/coding/paas/v4"
-                  value={settings.globalZaiBaseUrl || ''}
-                  onChange={(e) =>
-                    onSettingsChange({ ...settings, globalZaiBaseUrl: e.target.value || undefined })
-                  }
-                  className="font-mono text-sm"
-                />
+              <div className="rounded-lg bg-muted/30 border border-border p-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="globalZaiBaseUrl" className="text-sm font-medium text-foreground">
+                    {t('integrations.zaiBaseUrl')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('integrations.zaiBaseUrlDescription')}
+                  </p>
+                  <div className="max-w-lg">
+                    <Input
+                      id="globalZaiBaseUrl"
+                      type="text"
+                      placeholder="https://api.z.ai/api/coding/paas/v4"
+                      value={settings.globalZaiBaseUrl || ''}
+                      onChange={(e) =>
+                        onSettingsChange({ ...settings, globalZaiBaseUrl: e.target.value || undefined })
+                      }
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="globalZaiKey" className="text-sm font-medium text-foreground">
+                    {t('integrations.zaiKey')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('integrations.zaiKeyDescription')}
+                  </p>
+                  <div className="relative max-w-lg">
+                    <Input
+                      id="globalZaiKey"
+                      type={showGlobalZaiKey ? 'text' : 'password'}
+                      placeholder="zai-..."
+                      value={settings.globalZaiApiKey || ''}
+                      onChange={(e) =>
+                        onSettingsChange({ ...settings, globalZaiApiKey: e.target.value || undefined })
+                      }
+                      className="pr-10 font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGlobalZaiKey(!showGlobalZaiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showGlobalZaiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
