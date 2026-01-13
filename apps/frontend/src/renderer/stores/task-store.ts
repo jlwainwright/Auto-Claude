@@ -3,6 +3,8 @@ import type { Task, TaskStatus, SubtaskStatus, ImplementationPlan, Subtask, Task
 import { debugLog } from '../../shared/utils/debug-logger';
 import { isTerminalPhase } from '../../shared/constants/phase-protocol';
 
+const missingTaskIdsLogged = new Set<string>();
+
 interface TaskState {
   tasks: Task[];
   selectedTaskId: string | null;
@@ -156,7 +158,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
       const index = findTaskIndex(state.tasks, taskId);
       if (index === -1) {
-        console.log('[updateTaskFromPlan] Task not found:', taskId);
+        // This can happen when file watchers emit updates for tasks that aren't loaded in the current UI session.
+        // Keep it out of the normal console noise (dedupe to avoid flooding when DEBUG is enabled).
+        if (!missingTaskIdsLogged.has(taskId)) {
+          missingTaskIdsLogged.add(taskId);
+          debugLog('[updateTaskFromPlan] Task not found:', taskId);
+        }
         return state;
       }
 

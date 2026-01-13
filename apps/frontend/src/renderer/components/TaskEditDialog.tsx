@@ -26,7 +26,7 @@
  * />
  * ```
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
@@ -120,59 +120,70 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
     task.metadata?.requireReviewBeforeCoding ?? false
   );
 
-  // Reset form when task changes or dialog opens
+  // Initialize form when dialog opens (or when switching tasks while open).
+  // Important: tasks update frequently during execution (logs/progress), so we must not
+  // clobber in-progress user edits while the modal is open.
+  const initializedTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (open) {
-      setTitle(task.title);
-      setDescription(task.description);
-      setCategory(task.metadata?.category || '');
-      setPriority(task.metadata?.priority || '');
-      setComplexity(task.metadata?.complexity || '');
-      setImpact(task.metadata?.impact || '');
+    if (!open) {
+      initializedTaskIdRef.current = null;
+      return;
+    }
 
-      // Reset model configuration
-      const taskModel = task.metadata?.model;
-      const taskThinking = task.metadata?.thinkingLevel;
-      const storedProfileId = task.metadata?.profileId;
+    if (initializedTaskIdRef.current === task.id) {
+      return;
+    }
+    initializedTaskIdRef.current = task.id;
 
-      let nextProfileId: string;
-      if (storedProfileId) {
-        if (storedProfileId === 'custom') {
-          nextProfileId = 'custom';
-        } else if (allProfiles.some((p) => p.id === storedProfileId)) {
-          nextProfileId = storedProfileId;
-        } else {
-          nextProfileId = 'custom';
-        }
-      } else if (task.metadata?.isAutoProfile) {
-        nextProfileId = 'auto';
-      } else if (taskModel && taskThinking) {
-        const matchingProfile = allProfiles.find(
-          (p) => p.id !== 'auto' && p.model === taskModel && p.thinkingLevel === taskThinking
-        );
-        nextProfileId = matchingProfile?.id || 'custom';
+    setTitle(task.title);
+    setDescription(task.description);
+    setCategory(task.metadata?.category || '');
+    setPriority(task.metadata?.priority || '');
+    setComplexity(task.metadata?.complexity || '');
+    setImpact(task.metadata?.impact || '');
+
+    // Reset model configuration
+    const taskModel = task.metadata?.model;
+    const taskThinking = task.metadata?.thinkingLevel;
+    const storedProfileId = task.metadata?.profileId;
+
+    let nextProfileId: string;
+    if (storedProfileId) {
+      if (storedProfileId === 'custom') {
+        nextProfileId = 'custom';
+      } else if (allProfiles.some((p) => p.id === storedProfileId)) {
+        nextProfileId = storedProfileId;
       } else {
-        nextProfileId = settings.selectedAgentProfile || 'auto';
+        nextProfileId = 'custom';
       }
+    } else if (task.metadata?.isAutoProfile) {
+      nextProfileId = 'auto';
+    } else if (taskModel && taskThinking) {
+      const matchingProfile = allProfiles.find(
+        (p) => p.id !== 'auto' && p.model === taskModel && p.thinkingLevel === taskThinking
+      );
+      nextProfileId = matchingProfile?.id || 'custom';
+    } else {
+      nextProfileId = settings.selectedAgentProfile || 'auto';
+    }
 
-      const profileDefaults = allProfiles.find((p) => p.id === nextProfileId) || selectedProfile;
+    const profileDefaults = allProfiles.find((p) => p.id === nextProfileId) || selectedProfile;
 
-      setProfileId(nextProfileId);
-      setModel(taskModel || profileDefaults.model);
-      setThinkingLevel(taskThinking || profileDefaults.thinkingLevel);
-      setPhaseModels(task.metadata?.phaseModels || profileDefaults.phaseModels || DEFAULT_PHASE_MODELS);
-      setPhaseThinking(task.metadata?.phaseThinking || profileDefaults.phaseThinking || DEFAULT_PHASE_THINKING);
+    setProfileId(nextProfileId);
+    setModel(taskModel || profileDefaults.model);
+    setThinkingLevel(taskThinking || profileDefaults.thinkingLevel);
+    setPhaseModels(task.metadata?.phaseModels || profileDefaults.phaseModels || DEFAULT_PHASE_MODELS);
+    setPhaseThinking(task.metadata?.phaseThinking || profileDefaults.phaseThinking || DEFAULT_PHASE_THINKING);
 
-      setImages(task.metadata?.attachedImages || []);
-      setRequireReviewBeforeCoding(task.metadata?.requireReviewBeforeCoding ?? false);
-      setError(null);
+    setImages(task.metadata?.attachedImages || []);
+    setRequireReviewBeforeCoding(task.metadata?.requireReviewBeforeCoding ?? false);
+    setError(null);
 
-      // Auto-expand classification if it has content
-      if (task.metadata?.category || task.metadata?.priority || task.metadata?.complexity || task.metadata?.impact) {
-        setShowClassification(true);
-      } else {
-        setShowClassification(false);
-      }
+    // Auto-expand classification if it has content
+    if (task.metadata?.category || task.metadata?.priority || task.metadata?.complexity || task.metadata?.impact) {
+      setShowClassification(true);
+    } else {
+      setShowClassification(false);
     }
   }, [open, task, allProfiles, settings.selectedAgentProfile, selectedProfile]);
 
