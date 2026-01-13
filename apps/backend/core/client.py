@@ -174,13 +174,16 @@ def _get_zai_config(agent_type: str) -> tuple[str, str]:
 
     # Use coding endpoint for agentic/code-heavy flows.
     is_coding_flow = agent_type in ("coder", "planner", "qa_reviewer", "qa_fixer")
-    default_base = (
-        "https://api.z.ai/api/coding/paas/v4"
-        if is_coding_flow
-        else "https://api.z.ai/api/paas/v4"
-    )
+
+    # IMPORTANT:
+    # Some providers expose separate "coding" endpoints, but they are not always
+    # feature-parity with the standard OpenAI-compatible endpoint for all models.
+    # Default to the standard endpoint unless the user explicitly configures a
+    # coding-specific base URL.
+    default_base = "https://api.z.ai/api/paas/v4"
     base_url = (
-        (os.environ.get("ZAI_CODING_BASE_URL") if is_coding_flow else os.environ.get("ZAI_BASE_URL"))
+        (os.environ.get("ZAI_CODING_BASE_URL") if is_coding_flow else None)
+        or os.environ.get("ZAI_BASE_URL")
         or default_base
     ).strip()
 

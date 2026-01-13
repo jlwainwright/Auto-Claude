@@ -224,7 +224,19 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           // When the plan explicitly says 'human_review', don't override it with calculated status
           // Note: ImplementationPlan type already defines status?: TaskStatus
           const planStatus = plan.status;
-          const isExplicitHumanReview = planStatus === 'human_review';
+          // Only treat plan.status === 'human_review' as authoritative when it's actually justified.
+          // This prevents stale plan files (e.g., from an earlier plan-review stage) from pinning
+          // active tasks in Human Review while subtasks are still in progress.
+          const requiresReviewBeforeCoding = Boolean(t.metadata?.requireReviewBeforeCoding);
+          const planPlanStatus = (plan as unknown as { planStatus?: string })?.planStatus;
+          const isPlanReviewStage =
+            requiresReviewBeforeCoding &&
+            planPlanStatus === 'review' &&
+            !anyFailed &&
+            !anyInProgress &&
+            !anyCompleted;
+          const isExplicitHumanReview =
+            planStatus === 'human_review' && (anyFailed || allCompleted || isPlanReviewStage);
 
           // FIX (ACS-203): Add defensive check for terminal status transitions
           // Before allowing transition to 'done', 'human_review', or 'ai_review', verify:

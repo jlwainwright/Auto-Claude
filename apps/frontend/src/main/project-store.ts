@@ -633,18 +633,29 @@ export class ProjectStore {
         // This happens when a task is in planning phase (creating spec) but no subtasks have been started
         const isActiveProcessStatus = (plan.status as string) === 'planning' || (plan.status as string) === 'coding' || (plan.status as string) === 'in_progress';
 
-        // Check if this is a plan review (spec approval stage before coding starts)
-        // planStatus: "review" indicates spec creation is complete and awaiting user approval
-        const isPlanReviewStage = (plan as unknown as { planStatus?: string })?.planStatus === 'review';
+        // Check if this is a plan/spec approval stage before coding starts.
+        // Only valid when the user explicitly enabled "requireReviewBeforeCoding".
+        // NOTE: planStatus === "review" is also used for ai_review/human_review after completion,
+        // so we must gate this to avoid pinning active tasks in Human Review.
+        const requiresReviewBeforeCoding = Boolean(metadata?.requireReviewBeforeCoding);
+        const isPlanReviewStage =
+          requiresReviewBeforeCoding &&
+          (plan as unknown as { planStatus?: string })?.planStatus === 'review' &&
+          calculatedStatus === 'backlog';
 
         // Determine if there is remaining work to do
         // True if: no subtasks exist yet (planning in progress) OR some subtasks are incomplete
         // This prevents 'in_progress' from overriding 'human_review' when all work is done
         const hasRemainingWork = allSubtasks.length === 0 || allSubtasks.some((s) => s.status !== 'completed');
 
+        // Additional subtask-derived signals for validating stored human_review
+        const hasFailedSubtasks = allSubtasks.some((s) => s.status === 'failed');
+        const allCompleted = allSubtasks.length > 0 && allSubtasks.every((s) => s.status === 'completed');
+
         const isStoredStatusValid =
           (storedStatus === calculatedStatus) || // Matches calculated
-          (storedStatus === 'human_review' && (calculatedStatus === 'ai_review' || calculatedStatus === 'in_progress')) || // Human review is more advanced than ai_review or in_progress (fixes status loop bug)
+          (storedStatus === 'human_review' && hasFailedSubtasks) || // Failed subtasks require human attention
+          (storedStatus === 'human_review' && allCompleted) || // Completed work waiting for review/merge
           (storedStatus === 'human_review' && isPlanReviewStage) || // Plan review stage (awaiting spec approval)
           (isActiveProcessStatus && storedStatus === 'in_progress' && hasRemainingWork); // Planning/coding phases should show as in_progress ONLY when there's remaining work
 
@@ -652,8 +663,6 @@ export class ProjectStore {
           // Preserve reviewReason for human_review status
           if (storedStatus === 'human_review' && !reviewReason) {
             // Infer reason from subtask states or plan review stage
-            const hasFailedSubtasks = allSubtasks.some((s) => s.status === 'failed');
-            const allCompleted = allSubtasks.length > 0 && allSubtasks.every((s) => s.status === 'completed');
             if (hasFailedSubtasks) {
               reviewReason = 'errors';
             } else if (allCompleted) {
