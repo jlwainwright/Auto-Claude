@@ -238,6 +238,21 @@ export function ProfileEditDialog({ open, onOpenChange, onSaved, profile }: Prof
       return;
     }
 
+    // Guardrail: Anthropic API profiles should not be used to configure GLM/Z.AI models.
+    // If a user enters glm-* here, it can accidentally override Claude shorthands (opus/sonnet/haiku)
+    // and route Claude phases to the Z.AI OpenAI-compatible client.
+    const modelOverrides = [defaultModel, haikuModel, sonnetModel, opusModel]
+      .map((m) => m.trim())
+      .filter(Boolean);
+    if (modelOverrides.some((m) => m.toLowerCase().startsWith('glm-'))) {
+      toast({
+        title: 'Invalid model override',
+        description: 'GLM (glm-*) models are configured in Agent Profiles (provider: Z.AI), not in Claude API profiles. Remove glm-* overrides here and switch the task phase model/provider instead.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (isEditMode && profile) {
       // Update existing profile
       const updatedProfile: APIProfile = {

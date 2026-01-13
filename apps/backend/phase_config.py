@@ -8,8 +8,11 @@ Reads configuration from task_metadata.json and provides resolved model IDs.
 
 import json
 import os
+import logging
 from pathlib import Path
 from typing import Literal, TypedDict
+
+logger = logging.getLogger(__name__)
 
 # Model shorthand to full model ID mapping
 MODEL_ID_MAP: dict[str, str] = {
@@ -121,7 +124,18 @@ def resolve_model_id(model: str) -> str:
         if env_var:
             env_value = os.environ.get(env_var)
             if env_value:
-                return env_value
+                # Guardrail: prevent accidental routing of Claude shorthands to GLM models.
+                # This can happen if an Anthropic API profile's model overrides are misconfigured
+                # (e.g., setting ANTHROPIC_DEFAULT_OPUS_MODEL=glm-4.7), which would cause the
+                # backend to treat Claude phases as OpenAI-compatible glm-* and hit Z.AI.
+                if env_value.strip().lower().startswith("glm-"):
+                    logger.warning(
+                        "Ignoring %s=%s because glm-* models must use Z.AI provider configuration, not Anthropic model overrides.",
+                        env_var,
+                        env_value,
+                    )
+                else:
+                    return env_value
 
         # Fall back to hardcoded mapping
         return MODEL_ID_MAP[model]

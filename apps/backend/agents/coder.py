@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from core.client import create_client
+from core.file_utils import write_json_atomic
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -68,6 +69,66 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+def _is_non_retryable_session_error(error_text: str) -> bool:
+    """
+    Return True when an agent session error should NOT be auto-retried.
+
+    Rationale: Some provider errors (billing/quota/auth) will never succeed on retry and
+    otherwise cause an infinite retry loop in auto-continue mode.
+    """
+    if not error_text:
+        return False
+
+    lower = error_text.lower()
+
+    # Z.AI / OpenAI-compatible billing/quota errors (common payload: code 1113).
+    if "insufficient balance" in lower or "no resource package" in lower:
+        return True
+    if '"code":"1113"' in lower or "code 1113" in lower:
+        return True
+
+    # Misconfiguration errors that require user action.
+    if "zai_api_key is required" in lower:
+        return True
+
+    # Generic "quota" / "billing" signals across providers.
+    if "insufficient_quota" in lower or "quota" in lower and "insufficient" in lower:
+        return True
+
+    return False
+
+
+def _persist_fatal_error_to_plan(spec_dir: Path, message: str) -> None:
+    """
+    Persist a fatal error to implementation_plan.json so the UI can show an error state.
+    Best-effort; failures here should never crash the runner.
+    """
+    plan_file = spec_dir / "implementation_plan.json"
+    if not plan_file.exists():
+        return
+
+    try:
+        import json
+        from datetime import datetime, timezone
+
+        plan = json.loads(plan_file.read_text(encoding="utf-8"))
+        now = datetime.now(timezone.utc).isoformat()
+
+        plan["status"] = "error"
+        plan["updated_at"] = now
+        plan["last_updated"] = now
+        # Keep planStatus valid-ish for consumers; UI primarily keys off status.
+        plan["planStatus"] = plan.get("planStatus") or "pending"
+        # Include a short recovery note (truncated to avoid huge JSON).
+        short = (message or "").strip().replace("\n", " ")
+        if len(short) > 280:
+            short = short[:277] + "..."
+        plan["recoveryNote"] = f"Fatal session error at {now}: {short}"
+
+        write_json_atomic(plan_file, plan, indent=2, ensure_ascii=False)
+    except Exception:
+        return
 
 
 async def run_autonomous_agent(
@@ -528,6 +589,18 @@ async def run_autonomous_agent(
         elif status == "error":
             emit_phase(ExecutionPhase.FAILED, "Session encountered an error")
             print_status("Session encountered an error", "error")
+            if _is_non_retryable_session_error(response):
+                print()
+                print_status("Non-retryable provider/config error detected", "error")
+                print(
+                    muted(
+                        "Auto-retry stopped. Fix the provider configuration or switch models, then rerun the task."
+                    )
+                )
+                _persist_fatal_error_to_plan(spec_dir, response)
+                status_manager.update(state=BuildState.ERROR)
+                raise RuntimeError(response)
+
             print(muted("Will retry with a fresh session..."))
             status_manager.update(state=BuildState.ERROR)
             await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
