@@ -160,7 +160,7 @@ export type TaskImpact = 'low' | 'medium' | 'high' | 'critical';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 // Re-export ThinkingLevel (defined in settings.ts) for convenience
 export type { ThinkingLevel };
-export type ModelType = 'haiku' | 'sonnet' | 'opus';
+export type ModelType = 'haiku' | 'sonnet' | 'opus' | 'glm-4.7' | 'glm-4.5-air';
 export type TaskCategory =
   | 'feature'
   | 'bug_fix'
@@ -223,6 +223,7 @@ export interface TaskMetadata {
   requireReviewBeforeCoding?: boolean;  // Require human review of spec/plan before coding starts
 
   // Agent configuration (from agent profile or manual selection)
+  profileId?: string;  // Agent profile ID used for this task (e.g., 'auto', 'balanced', 'custom-...')
   model?: ModelType;  // Claude model to use (haiku, sonnet, opus) - used when not auto profile
   thinkingLevel?: ThinkingLevel;  // Thinking budget level (none, low, medium, high, ultrathink)
   // Auto profile - per-phase model configuration

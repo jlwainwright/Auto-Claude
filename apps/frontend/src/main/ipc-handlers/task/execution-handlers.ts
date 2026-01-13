@@ -10,6 +10,7 @@ import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
 import { checkGitStatus } from '../../project-initializer';
 import { getClaudeProfileManager } from '../../claude-profile-manager';
+import { taskUsesClaude } from '../../../shared/utils/provider';
 import {
   getPlanPath,
   persistPlanStatus,
@@ -128,16 +129,18 @@ export function registerTaskExecutionHandlers(
         return;
       }
 
-      // Check authentication - Claude requires valid auth to run tasks
-      const profileManager = getClaudeProfileManager();
-      if (!profileManager.hasValidAuth()) {
-        console.warn('[TASK_START] No valid authentication for active profile');
-        mainWindow.webContents.send(
-          IPC_CHANNELS.TASK_ERROR,
-          taskId,
-          'Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account, or set an OAuth token.'
-        );
-        return;
+      // Check authentication - Only required if task uses Claude provider
+      if (taskUsesClaude(task.metadata)) {
+        const profileManager = getClaudeProfileManager();
+        if (!profileManager.hasValidAuth()) {
+          console.warn('[TASK_START] No valid authentication for active profile');
+          mainWindow.webContents.send(
+            IPC_CHANNELS.TASK_ERROR,
+            taskId,
+            'Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account, or set an OAuth token.'
+          );
+          return;
+        }
       }
 
       console.warn('[TASK_START] Found task:', task.specId, 'status:', task.status, 'subtasks:', task.subtasks.length);
@@ -194,9 +197,9 @@ export function registerTaskExecutionHandlers(
           {
             parallel: false,  // Sequential for planning phase
             workers: 1,
-            baseBranch,
-            useWorktree: task.metadata?.useWorktree
-          }
+            baseBranch
+          },
+          task.metadata
         );
       } else {
         // Task has subtasks, start normal execution
@@ -210,9 +213,9 @@ export function registerTaskExecutionHandlers(
           {
             parallel: false,
             workers: 1,
-            baseBranch,
-            useWorktree: task.metadata?.useWorktree
-          }
+            baseBranch
+          },
+          task.metadata
         );
       }
 
@@ -653,9 +656,9 @@ export function registerTaskExecutionHandlers(
               {
                 parallel: false,
                 workers: 1,
-                baseBranch: baseBranchForUpdate,
-                useWorktree: task.metadata?.useWorktree
-              }
+                baseBranch: baseBranchForUpdate
+              },
+              task.metadata
             );
           } else {
             // Task has subtasks, start normal execution
@@ -668,9 +671,9 @@ export function registerTaskExecutionHandlers(
               {
                 parallel: false,
                 workers: 1,
-                baseBranch: baseBranchForUpdate,
-                useWorktree: task.metadata?.useWorktree
-              }
+                baseBranch: baseBranchForUpdate
+              },
+              task.metadata
             );
           }
 
@@ -1006,9 +1009,9 @@ export function registerTaskExecutionHandlers(
                 {
                   parallel: false,
                   workers: 1,
-                  baseBranch: baseBranchForRecovery,
-                  useWorktree: task.metadata?.useWorktree
-                }
+                  baseBranch: baseBranchForRecovery
+                },
+                task.metadata
               );
             }
 

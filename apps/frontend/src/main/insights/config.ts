@@ -106,7 +106,7 @@ export class InsightsConfig {
    * Get complete environment for process execution
    * Includes system env, auto-claude env, and active Claude profile
    */
-  async getProcessEnv(): Promise<Record<string, string>> {
+  async getProcessEnv(): Promise<NodeJS.ProcessEnv> {
     const autoBuildEnv = this.loadAutoBuildEnv();
     const profileEnv = getProfileEnv();
     const apiProfileEnv = await getAPIProfileEnv();
@@ -140,8 +140,18 @@ export class InsightsConfig {
     // are available even when app is launched from Finder/Dock.
     const augmentedEnv = getAugmentedEnv();
 
+    // Prevent accidental proxy env leakage from the parent process.
+    // Respect ANTHROPIC_* only when explicitly configured via auto-claude .env or profile env.
+    const baseEnv: NodeJS.ProcessEnv = { ...augmentedEnv };
+    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+      const hasExplicitOverride = !!(autoBuildEnv?.[key]?.trim() || profileEnv?.[key]?.trim() || apiProfileEnv?.[key]?.trim());
+      if (!hasExplicitOverride) {
+        delete baseEnv[key];
+      }
+    }
+
     return {
-      ...augmentedEnv,
+      ...baseEnv,
       ...pythonEnv, // Include PYTHONPATH for bundled site-packages
       ...autoBuildEnv,
       ...oauthModeClearVars,

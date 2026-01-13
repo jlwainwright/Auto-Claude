@@ -39,6 +39,8 @@ export const DEFAULT_APP_SETTINGS = {
   globalOpenAIApiKey: undefined as string | undefined,
   // Selected agent profile - defaults to 'auto' for per-phase optimized model selection
   selectedAgentProfile: 'auto',
+  // User-defined agent profiles (stored in settings.json)
+  customAgentProfiles: [],
   // Changelog preferences (persisted between sessions)
   changelogFormat: 'keep-a-changelog' as const,
   changelogAudience: 'user-facing' as const,

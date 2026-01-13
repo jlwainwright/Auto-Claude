@@ -367,6 +367,28 @@
     "resetToDefaults": "Reset to defaults",
     "resetToProfileDefaults": "Reset to {{profile}} defaults",
     "customized": "Customized",
+    "customProfiles": {
+      "add": "Add Custom Profile",
+      "addTitle": "Add Custom Profile",
+      "editTitle": "Edit Custom Profile",
+      "badge": "Custom",
+      "edit": "Edit profile",
+      "delete": "Delete profile",
+      "deleteTitle": "Delete custom profile?",
+      "deleteDescription": "This will permanently remove \"{{name}}\".",
+      "dialogDescription": "Create a saved preset you can select as your default agent profile.",
+      "readOnlyHint": "To customize this preset, create a custom profile.",
+      "fields": {
+        "name": "Name",
+        "namePlaceholder": "e.g., GLM Coding",
+        "description": "Description",
+        "descriptionPlaceholder": "Optional"
+      },
+      "validation": {
+        "nameRequired": "Name is required.",
+        "saveFailed": "Failed to save profile."
+      }
+    },
     "phaseConfigNote": "These settings will be used as defaults when creating new tasks with this profile. You can override them per-task in the task creation wizard.",
     "phases": {
       "spec": {

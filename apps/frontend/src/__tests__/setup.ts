@@ -38,11 +38,15 @@ if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollIntoView)
 
 // Mock requestAnimationFrame/cancelAnimationFrame for jsdom
 // Required by useXterm.ts which uses requestAnimationFrame for initial fit
-if (typeof global.requestAnimationFrame === 'undefined') {
-  global.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+const globalLike = globalThis as typeof globalThis & {
+  requestAnimationFrame?: (callback: FrameRequestCallback) => number;
+  cancelAnimationFrame?: (id: number) => void;
+};
+if (typeof globalLike.requestAnimationFrame === 'undefined') {
+  globalLike.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
     return setTimeout(() => callback(Date.now()), 0) as unknown as number;
   });
-  global.cancelAnimationFrame = vi.fn((id: number) => {
+  globalLike.cancelAnimationFrame = vi.fn((id: number) => {
     clearTimeout(id);
   });
 }

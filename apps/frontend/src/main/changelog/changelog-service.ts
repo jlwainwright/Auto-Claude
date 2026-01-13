@@ -231,10 +231,12 @@ export class ChangelogService extends EventEmitter {
         throw new Error(`Claude CLI not found. Please ensure Claude Code is installed. Looked for: ${this.claudePath}`);
       }
 
+      const autoBuildEnv = this.loadAutoBuildEnv();
       this.versionSuggester = new VersionSuggester(
         this.pythonPath,
         this.claudePath,
         autoBuildSource,
+        autoBuildEnv,
         this.isDebugEnabled()
       );
     }

@@ -259,8 +259,18 @@ export class ChangelogGenerator extends EventEmitter {
       authMethod: profileEnv.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth-token' : (profileEnv.CLAUDE_CONFIG_DIR ? 'config-dir' : 'default')
     });
 
+    // Prevent accidental proxy env leakage from the parent process.
+    // Respect ANTHROPIC_* only when explicitly configured via auto-claude .env or profile env.
+    const baseEnv: NodeJS.ProcessEnv = { ...augmentedEnv };
+    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+      const hasExplicitOverride = !!(this.autoBuildEnv?.[key]?.trim() || profileEnv?.[key]?.trim());
+      if (!hasExplicitOverride) {
+        delete baseEnv[key];
+      }
+    }
+
     const spawnEnv: Record<string, string> = {
-      ...augmentedEnv,
+      ...baseEnv as Record<string, string>,
       ...this.autoBuildEnv,
       ...profileEnv, // Include active Claude profile config
       // Ensure critical env vars are set for claude CLI

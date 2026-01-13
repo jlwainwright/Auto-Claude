@@ -66,7 +66,9 @@ const LOG_PHASE_TO_CONFIG_PHASE: Record<TaskLogPhase, keyof PhaseModelConfig> = 
 const MODEL_SHORT_LABELS: Record<ModelTypeShort, string> = {
   opus: 'Opus',
   sonnet: 'Sonnet',
-  haiku: 'Haiku'
+  haiku: 'Haiku',
+  'glm-4.7': 'GLM-4.7',
+  'glm-4.5-air': 'GLM-4.5-Air'
 };
 
 // Short labels for thinking levels
@@ -87,8 +89,11 @@ function getPhaseConfig(
 
   const configPhase = LOG_PHASE_TO_CONFIG_PHASE[logPhase];
 
-  // Auto profile with per-phase config
-  if (metadata.isAutoProfile && metadata.phaseModels && metadata.phaseThinking) {
+  const hasPhaseConfig = Boolean(metadata.phaseModels && metadata.phaseThinking);
+  const usePhaseConfig = hasPhaseConfig && (metadata.profileId ? metadata.profileId !== 'custom' : metadata.isAutoProfile);
+
+  // Per-phase config
+  if (usePhaseConfig && metadata.phaseModels && metadata.phaseThinking) {
     const model = metadata.phaseModels[configPhase];
     const thinking = metadata.phaseThinking[configPhase];
     return {

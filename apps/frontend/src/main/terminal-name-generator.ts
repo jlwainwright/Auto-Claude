@@ -162,12 +162,22 @@ export class TerminalNameGenerator extends EventEmitter {
     const profileEnv = getProfileEnv();
 
     return new Promise((resolve) => {
+      // Prevent accidental proxy env leakage from the parent process.
+      // Respect ANTHROPIC_* only when explicitly configured via auto-claude .env or profile env.
+      const baseEnv: NodeJS.ProcessEnv = { ...process.env };
+      for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+        const hasExplicitOverride = !!(autoBuildEnv?.[key]?.trim() || profileEnv?.[key]?.trim());
+        if (!hasExplicitOverride) {
+          delete baseEnv[key];
+        }
+      }
+
       // Use the venv Python where claude_agent_sdk is installed
       const [pythonCommand, pythonBaseArgs] = parsePythonCommand(venvPythonPath);
       const childProcess = spawn(pythonCommand, [...pythonBaseArgs, '-c', script], {
         cwd: autoBuildSource,
         env: {
-          ...process.env,
+          ...baseEnv,
           ...autoBuildEnv,
           ...profileEnv, // Include active Claude profile config
           PYTHONUNBUFFERED: '1',

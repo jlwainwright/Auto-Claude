@@ -21,12 +21,19 @@ Example usage:
     client = create_simple_client(agent_type="insights", cwd=project_dir)
 """
 
+import os
 from pathlib import Path
 
 from agents.tools_pkg import get_agent_config, get_default_thinking_level
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from core.auth import get_sdk_env_vars, require_auth_token
 from phase_config import get_thinking_budget
+try:
+    # When running with apps/backend on sys.path (most runner entrypoints)
+    from providers.openai_compat import OpenAICompatClient
+except ModuleNotFoundError:
+    # When imported as a package (e.g., apps.backend.core.simple_client)
+    from ..providers.openai_compat import OpenAICompatClient
 
 
 def create_simple_client(
@@ -36,7 +43,7 @@ def create_simple_client(
     cwd: Path | None = None,
     max_turns: int = 1,
     max_thinking_tokens: int | None = None,
-) -> ClaudeSDKClient:
+) -> ClaudeSDKClient | OpenAICompatClient:
     """
     Create a minimal Claude SDK client for single-turn utility operations.
 
@@ -64,15 +71,6 @@ def create_simple_client(
     Raises:
         ValueError: If agent_type is not found in AGENT_CONFIGS
     """
-    # Get authentication
-    oauth_token = require_auth_token()
-    import os
-
-    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
-
-    # Get environment variables for SDK
-    sdk_env = get_sdk_env_vars()
-
     # Get agent configuration (raises ValueError if unknown type)
     config = get_agent_config(agent_type)
 
@@ -83,6 +81,44 @@ def create_simple_client(
     if max_thinking_tokens is None:
         thinking_level = get_default_thinking_level(agent_type)
         max_thinking_tokens = get_thinking_budget(thinking_level)
+
+    # Route OpenAI-compatible models (e.g., Z.AI GLM) to compat client.
+    # These models are not valid Anthropic model IDs.
+    if (model or "").strip().lower().startswith("glm-"):
+        api_key = (os.environ.get("ZAI_API_KEY") or "").strip()
+        if not api_key:
+            raise ValueError(
+                "ZAI_API_KEY is required to use glm-* models. "
+                "Set it in your project .auto-claude/.env or apps/backend/.env."
+            )
+
+        is_coding_flow = agent_type in ("coder", "planner", "qa_reviewer", "qa_fixer")
+        default_base = (
+            "https://api.z.ai/api/coding/paas/v4"
+            if is_coding_flow
+            else "https://api.z.ai/api/paas/v4"
+        )
+        base_url = (
+            (os.environ.get("ZAI_CODING_BASE_URL") if is_coding_flow else os.environ.get("ZAI_BASE_URL"))
+            or default_base
+        ).strip()
+
+        return OpenAICompatClient(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            system_prompt=system_prompt,
+            allowed_tools=allowed_tools,
+            max_turns=max_turns,
+            cwd=str(cwd.resolve()) if cwd else None,
+        )
+
+    # Claude SDK path (default)
+    oauth_token = require_auth_token()
+    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+
+    # Get environment variables for SDK
+    sdk_env = get_sdk_env_vars()
 
     return ClaudeSDKClient(
         options=ClaudeAgentOptions(

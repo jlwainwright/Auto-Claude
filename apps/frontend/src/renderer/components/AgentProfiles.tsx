@@ -1,4 +1,4 @@
-import { Brain, Scale, Zap, Check } from 'lucide-react';
+import { Brain, Scale, Zap, Check, Settings2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS, THINKING_LEVELS } from '../../shared/constants';
 import { useSettingsStore, saveSettings } from '../stores/settings-store';
@@ -10,7 +10,8 @@ import type { AgentProfile } from '../../shared/types/settings';
 const iconMap: Record<string, React.ElementType> = {
   Brain,
   Scale,
-  Zap
+  Zap,
+  Settings2
 };
 
 /**
@@ -20,6 +21,10 @@ const iconMap: Record<string, React.ElementType> = {
 export function AgentProfiles() {
   const settings = useSettingsStore((state) => state.settings);
   const selectedProfileId = settings.selectedAgentProfile || 'auto';
+  const allProfiles = [
+    ...DEFAULT_AGENT_PROFILES,
+    ...(settings.customAgentProfiles ?? [])
+  ];
 
   const handleSelectProfile = async (profileId: string) => {
     await saveSettings({ selectedAgentProfile: profileId });
@@ -132,7 +137,7 @@ export function AgentProfiles() {
 
           {/* Profile cards */}
           <div className="space-y-3">
-            {DEFAULT_AGENT_PROFILES.map(renderProfileCard)}
+            {allProfiles.map(renderProfileCard)}
           </div>
         </div>
       </div>

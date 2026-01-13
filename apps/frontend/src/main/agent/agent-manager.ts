@@ -7,11 +7,11 @@ import { AgentProcessManager } from './agent-process';
 import { AgentQueueManager } from './agent-queue';
 import { getClaudeProfileManager } from '../claude-profile-manager';
 import {
-  SpecCreationMetadata,
   TaskExecutionOptions,
   RoadmapConfig
 } from './types';
-import type { IdeationConfig } from '../../shared/types';
+import type { IdeationConfig, TaskMetadata } from '../../shared/types';
+import { taskUsesClaude } from '../../shared/utils/provider';
 
 /**
  * Main AgentManager - orchestrates agent process lifecycle
@@ -29,7 +29,7 @@ export class AgentManager extends EventEmitter {
     isSpecCreation?: boolean;
     taskDescription?: string;
     specDir?: string;
-    metadata?: SpecCreationMetadata;
+    metadata?: TaskMetadata;
     baseBranch?: string;
     swapCount: number;
   }> = new Map();
@@ -92,14 +92,16 @@ export class AgentManager extends EventEmitter {
     projectPath: string,
     taskDescription: string,
     specDir?: string,
-    metadata?: SpecCreationMetadata,
+    metadata?: TaskMetadata,
     baseBranch?: string
   ): Promise<void> {
-    // Pre-flight auth check: Verify active profile has valid authentication
-    const profileManager = getClaudeProfileManager();
-    if (!profileManager.hasValidAuth()) {
-      this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
-      return;
+    // Pre-flight auth check: Only verify Claude authentication if task uses Claude
+    if (taskUsesClaude(metadata)) {
+      const profileManager = getClaudeProfileManager();
+      if (!profileManager.hasValidAuth()) {
+        this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
+        return;
+      }
     }
 
     const autoBuildSource = this.processManager.getAutoBuildSourcePath();
@@ -138,9 +140,15 @@ export class AgentManager extends EventEmitter {
       args.push('--auto-approve');
     }
 
-    // Pass model and thinking level configuration
-    // For auto profile, use phase-specific config; otherwise use single model/thinking
-    if (metadata?.isAutoProfile && metadata.phaseModels && metadata.phaseThinking) {
+    // Pass model and thinking level configuration.
+    // Prefer per-phase config when the task is configured to use it.
+    const usePhaseConfig = Boolean(
+      metadata?.phaseModels &&
+        metadata.phaseThinking &&
+        (metadata.profileId ? metadata.profileId !== 'custom' : metadata.isAutoProfile)
+    );
+
+    if (usePhaseConfig && metadata?.phaseModels && metadata.phaseThinking) {
       // Pass the spec phase model and thinking level to spec_runner
       args.push('--model', metadata.phaseModels.spec);
       args.push('--thinking-level', metadata.phaseThinking.spec);
@@ -171,13 +179,16 @@ export class AgentManager extends EventEmitter {
     taskId: string,
     projectPath: string,
     specId: string,
-    options: TaskExecutionOptions = {}
+    options: TaskExecutionOptions = {},
+    metadata?: TaskMetadata
   ): Promise<void> {
-    // Pre-flight auth check: Verify active profile has valid authentication
-    const profileManager = getClaudeProfileManager();
-    if (!profileManager.hasValidAuth()) {
-      this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
-      return;
+    // Pre-flight auth check: Only verify Claude authentication if task uses Claude
+    if (taskUsesClaude(metadata)) {
+      const profileManager = getClaudeProfileManager();
+      if (!profileManager.hasValidAuth()) {
+        this.emit('error', taskId, 'Claude authentication required. Please authenticate in Settings > Claude Profiles before starting tasks.');
+        return;
+      }
     }
 
     const autoBuildSource = this.processManager.getAutoBuildSourcePath();
@@ -349,7 +360,7 @@ export class AgentManager extends EventEmitter {
     isSpecCreation?: boolean,
     taskDescription?: string,
     specDir?: string,
-    metadata?: SpecCreationMetadata,
+    metadata?: TaskMetadata,
     baseBranch?: string
   ): void {
     // Preserve swapCount if context already exists (for restarts)

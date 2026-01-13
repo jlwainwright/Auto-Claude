@@ -22,6 +22,7 @@ export class VersionSuggester {
     private pythonPath: string,
     private claudePath: string,
     private autoBuildSourcePath: string,
+    private autoBuildEnv: Record<string, string>,
     debugEnabled: boolean
   ) {
     this.debugEnabled = debugEnabled;
@@ -222,8 +223,19 @@ except Exception as e:
     // Get active Claude profile environment
     const profileEnv = getProfileEnv();
 
+    // Prevent accidental proxy env leakage from the parent process.
+    // Respect ANTHROPIC_* only when explicitly configured via auto-claude .env or profile env.
+    const baseEnv: NodeJS.ProcessEnv = { ...augmentedEnv };
+    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+      const hasExplicitOverride = !!(this.autoBuildEnv?.[key]?.trim() || profileEnv?.[key]?.trim());
+      if (!hasExplicitOverride) {
+        delete baseEnv[key];
+      }
+    }
+
     const spawnEnv: Record<string, string> = {
-      ...augmentedEnv,
+      ...baseEnv as Record<string, string>,
+      ...this.autoBuildEnv,
       ...profileEnv,
       // Ensure critical env vars are set for claude CLI
       ...(isWindows ? { USERPROFILE: homeDir } : { HOME: homeDir }),

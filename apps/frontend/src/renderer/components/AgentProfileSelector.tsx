@@ -9,7 +9,7 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brain, Scale, Zap, Sliders, Sparkles, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
+import { Brain, Scale, Zap, Sliders, Sparkles, ChevronDown, ChevronUp, Pencil, Settings2 } from 'lucide-react';
 import { Label } from './ui/label';
 import {
   Select,
@@ -28,6 +28,7 @@ import {
 import type { ModelType, ThinkingLevel } from '../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import { cn } from '../lib/utils';
+import { useSettingsStore } from '../stores/settings-store';
 
 interface AgentProfileSelectorProps {
   /** Currently selected profile ID ('auto', 'complex', 'balanced', 'quick', or 'custom') */
@@ -58,7 +59,8 @@ const iconMap: Record<string, React.ElementType> = {
   Brain,
   Scale,
   Zap,
-  Sparkles
+  Sparkles,
+  Settings2
 };
 
 // Phase label translation keys
@@ -83,10 +85,16 @@ export function AgentProfileSelector({
   disabled
 }: AgentProfileSelectorProps) {
   const { t } = useTranslation('settings');
+  const settings = useSettingsStore((state) => state.settings);
   const [showPhaseDetails, setShowPhaseDetails] = useState(false);
 
   const isCustom = profileId === 'custom';
   const isAuto = profileId === 'auto';
+
+  const allProfiles = [
+    ...DEFAULT_AGENT_PROFILES,
+    ...(settings.customAgentProfiles ?? [])
+  ];
 
   // Use provided phase configs or defaults
   const currentPhaseModels = phaseModels || DEFAULT_PHASE_MODELS;
@@ -98,7 +106,7 @@ export function AgentProfileSelector({
       onProfileChange('custom', model as ModelType || 'sonnet', thinkingLevel as ThinkingLevel || 'medium');
     } else {
       // Select preset profile - all profiles now have phase configs
-      const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === selectedId);
+      const profile = allProfiles.find(p => p.id === selectedId);
       if (profile) {
         onProfileChange(profile.id, profile.model, profile.thinkingLevel);
         // Initialize phase configs with profile defaults if callbacks provided
@@ -139,7 +147,7 @@ export function AgentProfileSelector({
         description: t('agentProfile.customDescription')
       };
     }
-    const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === profileId);
+    const profile = allProfiles.find(p => p.id === profileId);
     if (profile) {
       return {
         icon: iconMap[profile.icon || 'Scale'] || Scale,
@@ -178,7 +186,7 @@ export function AgentProfileSelector({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {DEFAULT_AGENT_PROFILES.map((profile) => {
+            {allProfiles.map((profile) => {
               const ProfileIcon = iconMap[profile.icon || 'Scale'] || Scale;
               const modelLabel = AVAILABLE_MODELS.find(m => m.value === profile.model)?.label;
               return (

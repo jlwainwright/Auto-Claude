@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Brain, Scale, Zap, Sparkles, Sliders, Check } from 'lucide-react';
+import { Brain, Scale, Zap, Sparkles, Sliders, Check, Settings2 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
 import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS } from '../../shared/constants';
 import type { InsightsModelConfig } from '../../shared/types';
 import { CustomModelModal } from './CustomModelModal';
+import { useSettingsStore } from '../stores/settings-store';
 
 interface InsightsModelSelectorProps {
   currentConfig?: InsightsModelConfig;
@@ -23,7 +24,8 @@ const iconMap: Record<string, React.ElementType> = {
   Brain,
   Scale,
   Zap,
-  Sparkles
+  Sparkles,
+  Settings2
 };
 
 export function InsightsModelSelector({
@@ -32,11 +34,16 @@ export function InsightsModelSelector({
   disabled
 }: InsightsModelSelectorProps) {
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const settings = useSettingsStore((state) => state.settings);
 
   // Default to 'balanced' if no config, or if 'auto' profile was selected (not applicable for insights)
   const rawProfileId = currentConfig?.profileId || 'balanced';
   const selectedProfileId = rawProfileId === 'auto' ? 'balanced' : rawProfileId;
-  const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === selectedProfileId);
+  const allProfiles = [
+    ...DEFAULT_AGENT_PROFILES,
+    ...(settings.customAgentProfiles ?? [])
+  ].filter((p) => p.id !== 'auto');
+  const profile = allProfiles.find(p => p.id === selectedProfileId);
 
   // Get the appropriate icon
   const Icon = selectedProfileId === 'custom'
@@ -49,7 +56,7 @@ export function InsightsModelSelector({
       return;
     }
 
-    const selected = DEFAULT_AGENT_PROFILES.find(p => p.id === profileId);
+    const selected = allProfiles.find(p => p.id === profileId);
     if (selected) {
       onConfigChange({
         profileId: selected.id,
@@ -92,7 +99,7 @@ export function InsightsModelSelector({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel>Agent Profile</DropdownMenuLabel>
-          {DEFAULT_AGENT_PROFILES.filter(p => !p.isAutoProfile).map((p) => {
+          {allProfiles.map((p) => {
             const ProfileIcon = iconMap[p.icon || 'Brain'];
             const isSelected = selectedProfileId === p.id;
             const modelLabel = AVAILABLE_MODELS.find(m => m.value === p.model)?.label;

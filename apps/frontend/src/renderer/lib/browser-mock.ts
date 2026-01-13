@@ -298,7 +298,52 @@ const browserMockAPI: ElectronAPI = {
   openLogsFolder: async () => ({ success: false, error: 'Not available in browser mode' }),
   copyDebugInfo: async () => ({ success: false, error: 'Not available in browser mode' }),
   getRecentErrors: async () => [],
-  listLogFiles: async () => []
+  listLogFiles: async () => [],
+
+  // Status Report Operations
+  generateReport: async () => ({
+    success: true,
+    data: {
+      summary: {
+        totalSpecs: 0,
+        totalIssues: 0,
+        issueSeverityCounts: {
+          error: 0,
+          warning: 0,
+          info: 0,
+        },
+      },
+      specs: [],
+      roadmap: {
+        exists: false,
+        issues: [],
+      },
+    },
+  }),
+  planFix: async () => ({
+    success: true,
+    data: {
+      success: true,
+      plan: {
+        issueCodes: [],
+        changes: [],
+        description: 'Mock fix plan',
+        dryRun: true,
+      },
+    },
+  }),
+  startFix: async () => ({
+    success: true,
+    data: { success: true },
+  }),
+  cancelFix: async () => ({ success: true }),
+  getFixState: async () => ({
+    success: true,
+    data: { isRunning: false },
+  }),
+  onLog: () => () => {},
+  onComplete: () => () => {},
+  onError: () => () => {},
 };
 
 /**

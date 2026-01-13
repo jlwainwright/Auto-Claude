@@ -104,6 +104,11 @@ import type {
   RoadmapGenerationStatus
 } from './roadmap';
 import type {
+  StatusReport,
+  AnomalyFixPlanRequest,
+  AnomalyFixPlanResponse
+} from './status-report';
+import type {
   LinearTeam,
   LinearProject,
   LinearIssue,
@@ -788,6 +793,16 @@ export interface ElectronAPI {
   // MCP Server health check operations
   checkMcpHealth: (server: CustomMcpServer) => Promise<IPCResult<McpHealthCheckResult>>;
   testMcpConnection: (server: CustomMcpServer) => Promise<IPCResult<McpTestConnectionResult>>;
+
+  // Status Report operations
+  generateReport: (projectId: string) => Promise<IPCResult<StatusReport>>;
+  planFix: (request: AnomalyFixPlanRequest) => Promise<IPCResult<AnomalyFixPlanResponse>>;
+  startFix: (request: AnomalyFixPlanRequest) => Promise<IPCResult<{ success: boolean; error?: string }>>;
+  cancelFix: () => Promise<IPCResult>;
+  getFixState: () => Promise<IPCResult<{ isRunning: boolean }>>;
+  onLog: (callback: (log: string) => void) => () => void;
+  onComplete: (callback: (result: { success: boolean; error?: string }) => void) => () => void;
+  onError: (callback: (error: string) => void) => () => void;
 }
 
 declare global {

@@ -135,8 +135,21 @@ export class AgentProcessManager {
       }
     }
 
+    // Prevent accidental proxy env leakage from the parent process.
+    // These are supported via project/.env (extraEnv) but should not be implicitly inherited,
+    // otherwise users can get confusing "Connection error" failures when offline from a LAN proxy.
+    const baseEnv: NodeJS.ProcessEnv = { ...augmentedEnv };
+    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+      const extraValue = (extraEnv as Record<string, string | undefined>)[key];
+      const profileValue = (profileEnv as Record<string, string | undefined>)[key];
+      const hasExplicitOverride = !!(extraValue?.trim() || profileValue?.trim());
+      if (!hasExplicitOverride) {
+        delete baseEnv[key];
+      }
+    }
+
     return {
-      ...augmentedEnv,
+      ...baseEnv,
       ...gitBashEnv,
       ...extraEnv,
       ...profileEnv,

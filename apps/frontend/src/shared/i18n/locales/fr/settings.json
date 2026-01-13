@@ -367,6 +367,28 @@
     "resetToDefaults": "Réinitialiser par défaut",
     "resetToProfileDefaults": "Réinitialiser aux défauts de {{profile}}",
     "customized": "Personnalisé",
+    "customProfiles": {
+      "add": "Ajouter un profil personnalisé",
+      "addTitle": "Ajouter un profil personnalisé",
+      "editTitle": "Modifier le profil personnalisé",
+      "badge": "Perso",
+      "edit": "Modifier le profil",
+      "delete": "Supprimer le profil",
+      "deleteTitle": "Supprimer le profil personnalisé ?",
+      "deleteDescription": "Cela supprimera définitivement « {{name}} ».",
+      "dialogDescription": "Créez un préréglage enregistré que vous pouvez sélectionner comme profil d’agent par défaut.",
+      "readOnlyHint": "Pour personnaliser ce préréglage, créez un profil personnalisé.",
+      "fields": {
+        "name": "Nom",
+        "namePlaceholder": "ex : Codage GLM",
+        "description": "Description",
+        "descriptionPlaceholder": "Optionnel"
+      },
+      "validation": {
+        "nameRequired": "Le nom est requis.",
+        "saveFailed": "Échec de l’enregistrement du profil."
+      }
+    },
     "phaseConfigNote": "Ces paramètres seront utilisés par défaut lors de la création de nouvelles tâches avec ce profil. Vous pouvez les modifier par tâche dans l'assistant de création.",
     "phases": {
       "spec": {

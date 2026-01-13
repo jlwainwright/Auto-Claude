@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Insights Runner - AI chat for codebase insights using Claude SDK
+Insights Runner - AI chat for codebase insights
 
 This script provides an AI-powered chat interface for asking questions
 about a codebase. It can also suggest tasks based on the conversation.
@@ -41,7 +41,7 @@ from debug import (
     debug_section,
     debug_success,
 )
-from phase_config import resolve_model_id
+from phase_config import get_thinking_budget
 
 
 def load_project_context(project_dir: str) -> str:
@@ -138,22 +138,28 @@ async def run_with_sdk(
     model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
     thinking_level: str = "medium",
 ) -> None:
-    """Run the chat using Claude SDK with streaming."""
-    if not SDK_AVAILABLE:
-        print("Claude SDK not available, falling back to simple mode", file=sys.stderr)
-        run_simple(project_dir, message, history)
-        return
+    """Run the chat using the configured provider client with streaming-like output."""
+    is_glm = (model or "").strip().lower().startswith("glm-")
 
-    if not get_auth_token():
-        print(
-            "No authentication token found, falling back to simple mode",
-            file=sys.stderr,
-        )
-        run_simple(project_dir, message, history)
-        return
+    if not is_glm:
+        if not SDK_AVAILABLE:
+            print(
+                "Claude SDK not available, falling back to simple mode",
+                file=sys.stderr,
+            )
+            run_simple(project_dir, message, history)
+            return
 
-    # Ensure SDK can find the token
-    ensure_claude_code_oauth_token()
+        if not get_auth_token():
+            print(
+                "No authentication token found, falling back to simple mode",
+                file=sys.stderr,
+            )
+            run_simple(project_dir, message, history)
+            return
+
+        # Ensure SDK can find the token
+        ensure_claude_code_oauth_token()
 
     system_prompt = build_system_prompt(project_dir)
     project_path = Path(project_dir).resolve()
@@ -180,19 +186,16 @@ Current question: {message}"""
     )
 
     try:
-        # Create Claude SDK client with appropriate settings for insights
-        client = ClaudeSDKClient(
-            options=ClaudeAgentOptions(
-                model=resolve_model_id(model),  # Resolve via API Profile if configured
-                system_prompt=system_prompt,
-                allowed_tools=[
-                    "Read",
-                    "Glob",
-                    "Grep",
-                ],
-                max_turns=30,  # Allow sufficient turns for codebase exploration
-                cwd=str(project_path),
-            )
+        # Use the shared client factory so glm-* models route to Z.AI instead of Claude.
+        from core.simple_client import create_simple_client
+
+        client = create_simple_client(
+            agent_type="insights",
+            model=model,
+            system_prompt=system_prompt,
+            cwd=project_path,
+            max_turns=30,
+            max_thinking_tokens=get_thinking_budget(thinking_level),
         )
 
         # Use async context manager pattern
@@ -202,7 +205,7 @@ Current question: {message}"""
 
             # Stream the response
             response_text = ""
-            current_tool = None
+            pending_tools: list[str] = []
 
             async for msg in client.receive_response():
                 msg_type = type(msg).__name__
@@ -242,20 +245,29 @@ Current question: {message}"""
                                     elif "path" in inp:
                                         tool_input = inp["path"]
 
-                            current_tool = tool_name
+                            pending_tools.append(tool_name)
                             print(
                                 f"__TOOL_START__:{json.dumps({'name': tool_name, 'input': tool_input})}",
                                 flush=True,
                             )
 
                 elif msg_type == "ToolResult":
-                    # Tool finished executing
-                    if current_tool:
+                    # Some Claude SDK versions emit ToolResult directly.
+                    if pending_tools:
+                        tool_name = pending_tools.pop(0)
                         print(
-                            f"__TOOL_END__:{json.dumps({'name': current_tool})}",
+                            f"__TOOL_END__:{json.dumps({'name': tool_name})}",
                             flush=True,
                         )
-                        current_tool = None
+                elif msg_type == "UserMessage" and hasattr(msg, "content"):
+                    # OpenAI-compat client (and some SDK versions) emit tool results as UserMessage blocks.
+                    for block in msg.content:
+                        if type(block).__name__ == "ToolResultBlock" and pending_tools:
+                            tool_name = pending_tools.pop(0)
+                            print(
+                                f"__TOOL_END__:{json.dumps({'name': tool_name})}",
+                                flush=True,
+                            )
 
             # Ensure we have a newline at the end
             if response_text and not response_text.endswith("\n"):
@@ -268,10 +280,13 @@ Current question: {message}"""
             )
 
     except Exception as e:
-        print(f"Error using Claude SDK: {e}", file=sys.stderr)
+        print(f"Error running insights client: {e}", file=sys.stderr)
         import traceback
 
         traceback.print_exc(file=sys.stderr)
+        if is_glm:
+            # Don't silently fall back to Claude CLI for GLM-selected runs.
+            raise
         run_simple(project_dir, message, history)
 
 

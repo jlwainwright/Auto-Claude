@@ -26,7 +26,7 @@
  * />
  * ```
  */
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
@@ -60,9 +60,14 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
   const { t } = useTranslation(['tasks', 'common']);
   // Get selected agent profile from settings for defaults
   const { settings } = useSettingsStore();
-  const selectedProfile = DEFAULT_AGENT_PROFILES.find(
-    p => p.id === settings.selectedAgentProfile
-  ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
+  const allProfiles = useMemo(
+    () => [...DEFAULT_AGENT_PROFILES, ...(settings.customAgentProfiles ?? [])],
+    [settings.customAgentProfiles]
+  );
+  const selectedProfile = useMemo(
+    () => allProfiles.find((p) => p.id === settings.selectedAgentProfile) || allProfiles.find((p) => p.id === 'auto')!,
+    [allProfiles, settings.selectedAgentProfile]
+  );
 
   // Form state
   const [title, setTitle] = useState(task.title);
@@ -79,14 +84,18 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
 
   // Agent profile / model configuration
   const [profileId, setProfileId] = useState<string>(() => {
-    if (task.metadata?.isAutoProfile) {
-      return 'auto';
+    const storedProfileId = task.metadata?.profileId;
+    if (storedProfileId) {
+      if (storedProfileId === 'custom') return 'custom';
+      if (allProfiles.some((p) => p.id === storedProfileId)) return storedProfileId;
+      return 'custom';
     }
+    if (task.metadata?.isAutoProfile) return 'auto';
     const taskModel = task.metadata?.model;
     const taskThinking = task.metadata?.thinkingLevel;
     if (taskModel && taskThinking) {
-      const matchingProfile = DEFAULT_AGENT_PROFILES.find(
-        p => p.model === taskModel && p.thinkingLevel === taskThinking && !p.isAutoProfile
+      const matchingProfile = allProfiles.find(
+        p => p.id !== 'auto' && p.model === taskModel && p.thinkingLevel === taskThinking
       );
       return matchingProfile?.id || 'custom';
     }
@@ -124,30 +133,35 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       // Reset model configuration
       const taskModel = task.metadata?.model;
       const taskThinking = task.metadata?.thinkingLevel;
-      const isAutoProfile = task.metadata?.isAutoProfile;
+      const storedProfileId = task.metadata?.profileId;
 
-      if (isAutoProfile) {
-        setProfileId('auto');
-        setModel(taskModel || selectedProfile.model);
-        setThinkingLevel(taskThinking || selectedProfile.thinkingLevel);
-        setPhaseModels(task.metadata?.phaseModels || DEFAULT_PHASE_MODELS);
-        setPhaseThinking(task.metadata?.phaseThinking || DEFAULT_PHASE_THINKING);
+      let nextProfileId: string;
+      if (storedProfileId) {
+        if (storedProfileId === 'custom') {
+          nextProfileId = 'custom';
+        } else if (allProfiles.some((p) => p.id === storedProfileId)) {
+          nextProfileId = storedProfileId;
+        } else {
+          nextProfileId = 'custom';
+        }
+      } else if (task.metadata?.isAutoProfile) {
+        nextProfileId = 'auto';
       } else if (taskModel && taskThinking) {
-        const matchingProfile = DEFAULT_AGENT_PROFILES.find(
-          p => p.model === taskModel && p.thinkingLevel === taskThinking && !p.isAutoProfile
+        const matchingProfile = allProfiles.find(
+          (p) => p.id !== 'auto' && p.model === taskModel && p.thinkingLevel === taskThinking
         );
-        setProfileId(matchingProfile?.id || 'custom');
-        setModel(taskModel);
-        setThinkingLevel(taskThinking);
-        setPhaseModels(task.metadata?.phaseModels || DEFAULT_PHASE_MODELS);
-        setPhaseThinking(task.metadata?.phaseThinking || DEFAULT_PHASE_THINKING);
+        nextProfileId = matchingProfile?.id || 'custom';
       } else {
-        setProfileId(settings.selectedAgentProfile || 'auto');
-        setModel(selectedProfile.model);
-        setThinkingLevel(selectedProfile.thinkingLevel);
-        setPhaseModels(selectedProfile.phaseModels || DEFAULT_PHASE_MODELS);
-        setPhaseThinking(selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING);
+        nextProfileId = settings.selectedAgentProfile || 'auto';
       }
+
+      const profileDefaults = allProfiles.find((p) => p.id === nextProfileId) || selectedProfile;
+
+      setProfileId(nextProfileId);
+      setModel(taskModel || profileDefaults.model);
+      setThinkingLevel(taskThinking || profileDefaults.thinkingLevel);
+      setPhaseModels(task.metadata?.phaseModels || profileDefaults.phaseModels || DEFAULT_PHASE_MODELS);
+      setPhaseThinking(task.metadata?.phaseThinking || profileDefaults.phaseThinking || DEFAULT_PHASE_THINKING);
 
       setImages(task.metadata?.attachedImages || []);
       setRequireReviewBeforeCoding(task.metadata?.requireReviewBeforeCoding ?? false);
@@ -160,7 +174,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
         setShowClassification(false);
       }
     }
-  }, [open, task, settings.selectedAgentProfile, selectedProfile.model, selectedProfile.thinkingLevel, selectedProfile.phaseModels, selectedProfile.phaseThinking]);
+  }, [open, task, allProfiles, settings.selectedAgentProfile, selectedProfile]);
 
   const handleSave = async () => {
     // Validate input
@@ -172,6 +186,18 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
     // Check if anything changed
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
+
+    // Detect changes in agent configuration (single-model vs per-phase)
+    const isCustomProfile = profileId === 'custom';
+    const nextPhaseModels = isCustomProfile ? undefined : (phaseModels || DEFAULT_PHASE_MODELS);
+    const nextPhaseThinking = isCustomProfile ? undefined : (phaseThinking || DEFAULT_PHASE_THINKING);
+    const prevPhaseModels = task.metadata?.phaseModels;
+    const prevPhaseThinking = task.metadata?.phaseThinking;
+
+    const normalize = (value: unknown) => (value ? JSON.stringify(value) : null);
+    const phaseModelsChanged = normalize(nextPhaseModels) !== normalize(prevPhaseModels);
+    const phaseThinkingChanged = normalize(nextPhaseThinking) !== normalize(prevPhaseThinking);
+
     const hasChanges =
       trimmedTitle !== task.title ||
       trimmedDescription !== task.description ||
@@ -181,10 +207,10 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       impact !== (task.metadata?.impact || '') ||
       model !== (task.metadata?.model || '') ||
       thinkingLevel !== (task.metadata?.thinkingLevel || '') ||
+      phaseModelsChanged ||
+      phaseThinkingChanged ||
       requireReviewBeforeCoding !== (task.metadata?.requireReviewBeforeCoding ?? false) ||
-      JSON.stringify(images) !== JSON.stringify(task.metadata?.attachedImages || []) ||
-      JSON.stringify(phaseModels) !== JSON.stringify(task.metadata?.phaseModels || DEFAULT_PHASE_MODELS) ||
-      JSON.stringify(phaseThinking) !== JSON.stringify(task.metadata?.phaseThinking || DEFAULT_PHASE_THINKING);
+      JSON.stringify(images) !== JSON.stringify(task.metadata?.attachedImages || []);
 
     if (!hasChanges) {
       onOpenChange(false);
@@ -200,12 +226,19 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
     if (priority) metadataUpdates.priority = priority;
     if (complexity) metadataUpdates.complexity = complexity;
     if (impact) metadataUpdates.impact = impact;
+    metadataUpdates.profileId = profileId;
     if (model) metadataUpdates.model = model as ModelType;
     if (thinkingLevel) metadataUpdates.thinkingLevel = thinkingLevel as ThinkingLevel;
-    if (phaseModels && phaseThinking) {
+
+    // Per-phase config is used for all saved profiles; single-model config uses 'custom'
+    if (profileId === 'custom') {
+      metadataUpdates.isAutoProfile = false;
+      metadataUpdates.phaseModels = undefined;
+      metadataUpdates.phaseThinking = undefined;
+    } else {
       metadataUpdates.isAutoProfile = profileId === 'auto';
-      metadataUpdates.phaseModels = phaseModels;
-      metadataUpdates.phaseThinking = phaseThinking;
+      metadataUpdates.phaseModels = phaseModels || DEFAULT_PHASE_MODELS;
+      metadataUpdates.phaseThinking = phaseThinking || DEFAULT_PHASE_THINKING;
     }
     // Always set attachedImages to persist removal when all images are deleted
     metadataUpdates.attachedImages = images.length > 0 ? images : [];

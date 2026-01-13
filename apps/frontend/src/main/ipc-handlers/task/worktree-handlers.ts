@@ -1967,6 +1967,16 @@ export function registerWorktreeHandlers(
           hasConfigDir: !!profileEnv.CLAUDE_CONFIG_DIR
         });
 
+        // Prevent accidental proxy env leakage from the parent process.
+        // Respect ANTHROPIC_* only when explicitly configured via profile env.
+        const baseEnv: NodeJS.ProcessEnv = { ...process.env };
+        for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+          const hasExplicitOverride = !!profileEnv?.[key]?.trim();
+          if (!hasExplicitOverride) {
+            delete baseEnv[key];
+          }
+        }
+
         return new Promise((resolve) => {
           const MERGE_TIMEOUT_MS = 600000; // 10 minutes timeout for AI merge operations with many files
           let timeoutId: NodeJS.Timeout | null = null;
@@ -1984,7 +1994,7 @@ export function registerWorktreeHandlers(
           const mergeProcess = spawn(pythonCommand, [...pythonBaseArgs, ...args], {
             cwd: sourcePath,
             env: {
-              ...process.env,
+              ...baseEnv,
               ...pythonEnv, // Include bundled packages PYTHONPATH
               ...profileEnv, // Include active Claude profile OAuth token
               PYTHONUNBUFFERED: '1',
@@ -2477,12 +2487,22 @@ export function registerWorktreeHandlers(
         // Get Python environment for bundled packages
         const previewPythonEnv = pythonEnvManagerSingleton.getPythonEnv();
 
+        // Prevent accidental proxy env leakage from the parent process.
+        // Respect ANTHROPIC_* only when explicitly configured via profile env.
+        const previewBaseEnv: NodeJS.ProcessEnv = { ...process.env };
+        for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+          const hasExplicitOverride = !!previewProfileEnv?.[key]?.trim();
+          if (!hasExplicitOverride) {
+            delete previewBaseEnv[key];
+          }
+        }
+
         return new Promise((resolve) => {
           // Parse Python command to handle space-separated commands like "py -3"
           const [pythonCommand, pythonBaseArgs] = parsePythonCommand(pythonPath);
           const previewProcess = spawn(pythonCommand, [...pythonBaseArgs, ...args], {
             cwd: sourcePath,
-            env: { ...process.env, ...previewPythonEnv, ...previewProfileEnv, PYTHONUNBUFFERED: '1', PYTHONUTF8: '1', DEBUG: 'true' }
+            env: { ...previewBaseEnv, ...previewPythonEnv, ...previewProfileEnv, PYTHONUNBUFFERED: '1', PYTHONUTF8: '1', DEBUG: 'true' }
           });
 
           let stdout = '';

@@ -13,9 +13,13 @@ from typing import Literal, TypedDict
 
 # Model shorthand to full model ID mapping
 MODEL_ID_MAP: dict[str, str] = {
+    # Claude models
     "opus": "claude-opus-4-5-20251101",
     "sonnet": "claude-sonnet-4-5-20250929",
     "haiku": "claude-haiku-4-5-20251001",
+    # GLM/Z.AI models (shorthand to full model ID)
+    "glm-4.7": "glm-4.7",
+    "glm-4.5-air": "glm-4.5-air",
 }
 
 # Thinking level to budget tokens mapping (None = no extended thinking)
@@ -200,8 +204,18 @@ def get_phase_model(
     metadata = load_task_metadata(spec_dir)
 
     if metadata:
-        # Check for auto profile with phase-specific config
-        if metadata.get("isAutoProfile") and metadata.get("phaseModels"):
+        # Phase-specific config:
+        # - New tasks store profileId; any non-custom profile can use per-phase config
+        # - Legacy tasks use isAutoProfile to indicate per-phase config
+        profile_id = metadata.get("profileId")
+        phase_models = metadata.get("phaseModels")
+        use_phase_models = False
+        if profile_id:
+            use_phase_models = profile_id != "custom" and bool(phase_models)
+        else:
+            use_phase_models = bool(metadata.get("isAutoProfile")) and bool(phase_models)
+
+        if use_phase_models and phase_models:
             phase_models = metadata["phaseModels"]
             model = phase_models.get(phase, DEFAULT_PHASE_MODELS[phase])
             return resolve_model_id(model)
@@ -244,8 +258,18 @@ def get_phase_thinking(
     metadata = load_task_metadata(spec_dir)
 
     if metadata:
-        # Check for auto profile with phase-specific config
-        if metadata.get("isAutoProfile") and metadata.get("phaseThinking"):
+        # Phase-specific config:
+        # - New tasks store profileId; any non-custom profile can use per-phase config
+        # - Legacy tasks use isAutoProfile to indicate per-phase config
+        profile_id = metadata.get("profileId")
+        phase_thinking = metadata.get("phaseThinking")
+        use_phase_thinking = False
+        if profile_id:
+            use_phase_thinking = profile_id != "custom" and bool(phase_thinking)
+        else:
+            use_phase_thinking = bool(metadata.get("isAutoProfile")) and bool(phase_thinking)
+
+        if use_phase_thinking and phase_thinking:
             phase_thinking = metadata["phaseThinking"]
             return phase_thinking.get(phase, DEFAULT_PHASE_THINKING[phase])
 

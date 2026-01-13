@@ -10,16 +10,24 @@ import type { AgentProfile, PhaseModelConfig, FeatureModelConfig, FeatureThinkin
 // ============================================
 
 export const AVAILABLE_MODELS = [
+  // Claude models
   { value: 'opus', label: 'Claude Opus 4.5' },
   { value: 'sonnet', label: 'Claude Sonnet 4.5' },
-  { value: 'haiku', label: 'Claude Haiku 4.5' }
+  { value: 'haiku', label: 'Claude Haiku 4.5' },
+  // GLM/Z.AI models
+  { value: 'glm-4.7', label: 'GLM-4.7' },
+  { value: 'glm-4.5-air', label: 'GLM-4.5-Air' }
 ] as const;
 
-// Maps model shorthand to actual Claude model IDs
+// Maps model shorthand to actual model IDs
 export const MODEL_ID_MAP: Record<string, string> = {
+  // Claude models
   opus: 'claude-opus-4-5-20251101',
   sonnet: 'claude-sonnet-4-5-20250929',
-  haiku: 'claude-haiku-4-5-20251001'
+  haiku: 'claude-haiku-4-5-20251001',
+  // GLM/Z.AI models (full model IDs)
+  'glm-4.7': 'glm-4.7',
+  'glm-4.5-air': 'glm-4.5-air'
 } as const;
 
 // Maps thinking levels to budget tokens (null = no extended thinking)

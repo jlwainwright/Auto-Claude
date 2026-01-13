@@ -513,5 +513,10 @@ export const IPC_CHANNELS = {
   // Sentry error reporting
   SENTRY_STATE_CHANGED: 'sentry:state-changed',  // Notify main process when setting changes
   GET_SENTRY_DSN: 'sentry:get-dsn',              // Get DSN from main process (env var)
-  GET_SENTRY_CONFIG: 'sentry:get-config'         // Get full Sentry config (DSN + sample rates)
+  GET_SENTRY_CONFIG: 'sentry:get-config',        // Get full Sentry config (DSN + sample rates)
+
+  // Status Report operations
+  STATUS_REPORT_GENERATE: 'statusReport:generate',
+  STATUS_REPORT_ANOMALY_FIX_PLAN: 'statusReport:anomalyFixPlan',
+  STATUS_REPORT_ANOMALY_FIX_APPLY: 'statusReport:anomalyFixApply'
 } as const;

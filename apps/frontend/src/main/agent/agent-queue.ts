@@ -294,15 +294,29 @@ export class AgentQueueManager {
     const combinedPythonPath = pythonPathParts.join(process.platform === 'win32' ? ';' : ':');
 
     // Build final environment with proper precedence:
-    // 1. process.env (system)
+    // 1. process.env (system) - with proxy env cleanup
     // 2. pythonEnv (bundled packages environment)
     // 3. combinedEnv (auto-claude/.env for CLI usage)
     // 4. oauthModeClearVars (clear stale ANTHROPIC_* vars when in OAuth mode)
     // 5. profileEnv (Electron app OAuth token)
     // 6. apiProfileEnv (Active API profile config - highest priority for ANTHROPIC_* vars)
     // 7. Our specific overrides
+    //
+    // Note: ANTHROPIC_* proxy env vars are only respected when explicitly configured
+    // via .env (combinedEnv), profile, or API profile. This avoids accidental inheritance from a developer shell
+    // which can cause confusing connection failures.
+    const baseEnv: NodeJS.ProcessEnv = { ...process.env };
+    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+      const combinedValue = (combinedEnv as Record<string, string | undefined>)[key];
+      const profileValue = (profileEnv as Record<string, string | undefined>)[key];
+      const apiProfileValue = (apiProfileEnv as Record<string, string | undefined>)[key];
+      const hasExplicitOverride = !!(combinedValue?.trim() || profileValue?.trim() || apiProfileValue?.trim());
+      if (!hasExplicitOverride) {
+        delete baseEnv[key];
+      }
+    }
     const finalEnv = {
-      ...process.env,
+      ...baseEnv,
       ...pythonEnv,
       ...combinedEnv,
       ...oauthModeClearVars,
@@ -621,15 +635,29 @@ export class AgentQueueManager {
     const combinedPythonPath = pythonPathParts.join(process.platform === 'win32' ? ';' : ':');
 
     // Build final environment with proper precedence:
-    // 1. process.env (system)
+    // 1. process.env (system) - with proxy env cleanup
     // 2. pythonEnv (bundled packages environment)
     // 3. combinedEnv (auto-claude/.env for CLI usage)
     // 4. oauthModeClearVars (clear stale ANTHROPIC_* vars when in OAuth mode)
     // 5. profileEnv (Electron app OAuth token)
     // 6. apiProfileEnv (Active API profile config - highest priority for ANTHROPIC_* vars)
     // 7. Our specific overrides
+    //
+    // Note: ANTHROPIC_* proxy env vars are only respected when explicitly configured
+    // via .env (combinedEnv), profile, or API profile. This avoids accidental inheritance from a developer shell
+    // which can cause confusing connection failures.
+    const baseEnv: NodeJS.ProcessEnv = { ...process.env };
+    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const) {
+      const combinedValue = (combinedEnv as Record<string, string | undefined>)[key];
+      const profileValue = (profileEnv as Record<string, string | undefined>)[key];
+      const apiProfileValue = (apiProfileEnv as Record<string, string | undefined>)[key];
+      const hasExplicitOverride = !!(combinedValue?.trim() || profileValue?.trim() || apiProfileValue?.trim());
+      if (!hasExplicitOverride) {
+        delete baseEnv[key];
+      }
+    }
     const finalEnv = {
-      ...process.env,
+      ...baseEnv,
       ...pythonEnv,
       ...combinedEnv,
       ...oauthModeClearVars,

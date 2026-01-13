@@ -138,6 +138,53 @@ from core.auth import get_sdk_env_vars, require_auth_token
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
+try:
+    # When running with apps/backend on sys.path (most runner entrypoints)
+    from providers.openai_compat import OpenAICompatClient
+except ModuleNotFoundError:
+    # When imported as a package (e.g., apps.backend.core.client)
+    from ..providers.openai_compat import OpenAICompatClient
+
+
+def _is_openai_compat_model(model: str) -> bool:
+    """
+    Determine whether a model should be routed to an OpenAI-compatible provider.
+
+    Today this is used for Z.AI GLM models (glm-*).
+    """
+    m = (model or "").strip().lower()
+    return m.startswith("glm-")
+
+
+def _get_zai_config(agent_type: str) -> tuple[str, str]:
+    """
+    Get (api_key, base_url) for Z.AI OpenAI-compatible endpoints.
+
+    Env vars:
+      - ZAI_API_KEY (required for glm-* models)
+      - ZAI_BASE_URL (default: https://api.z.ai/api/paas/v4)
+      - ZAI_CODING_BASE_URL (default: https://api.z.ai/api/coding/paas/v4)
+    """
+    api_key = (os.environ.get("ZAI_API_KEY") or "").strip()
+    if not api_key:
+        raise ValueError(
+            "ZAI_API_KEY is required to use glm-* models. "
+            "Set it in your project .auto-claude/.env or apps/backend/.env."
+        )
+
+    # Use coding endpoint for agentic/code-heavy flows.
+    is_coding_flow = agent_type in ("coder", "planner", "qa_reviewer", "qa_fixer")
+    default_base = (
+        "https://api.z.ai/api/coding/paas/v4"
+        if is_coding_flow
+        else "https://api.z.ai/api/paas/v4"
+    )
+    base_url = (
+        (os.environ.get("ZAI_CODING_BASE_URL") if is_coding_flow else os.environ.get("ZAI_BASE_URL"))
+        or default_base
+    ).strip()
+
+    return api_key, base_url
 
 
 def _validate_custom_mcp_server(server: dict) -> bool:
@@ -442,7 +489,7 @@ def create_client(
     max_thinking_tokens: int | None = None,
     output_format: dict | None = None,
     agents: dict | None = None,
-) -> ClaudeSDKClient:
+) -> ClaudeSDKClient | OpenAICompatClient:
     """
     Create a Claude Agent SDK client with multi-layered security.
 
@@ -779,6 +826,30 @@ def create_client(
     else:
         print("   - CLAUDE.md: disabled by project settings")
     print()
+
+    # Route OpenAI-compatible models (e.g., Z.AI GLM) to compat client.
+    # This avoids sending glm-* model IDs to the Claude SDK (Anthropic) which results in 404s.
+    if _is_openai_compat_model(model):
+        api_key, base_url = _get_zai_config(agent_type)
+
+        # OpenAI-compat clients don't support MCP servers; filter to base supported tools.
+        return OpenAICompatClient(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            system_prompt=base_prompt,
+            allowed_tools=allowed_tools_list,
+            cwd=str(project_dir.resolve()),
+            max_turns=1000,
+        )
+
+    # Claude SDK path (default)
+    oauth_token = require_auth_token()
+    # Ensure SDK can access it via its expected env var
+    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+
+    # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
+    sdk_env = get_sdk_env_vars()
 
     # Build options dict, conditionally including output_format
     options_kwargs = {

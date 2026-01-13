@@ -149,8 +149,17 @@ def get_auth_token() -> str | None:
     # First check environment variables
     for var in AUTH_TOKEN_ENV_VARS:
         token = os.environ.get(var)
-        if token:
-            return token
+        if not token:
+            continue
+
+        # Ignore Electron-safeStorage encrypted tokens ("enc:...") which cannot be
+        # decrypted in the backend process. This prevents confusing auth/connection
+        # failures when a UI-written .env contains an encrypted value.
+        token = token.strip()
+        if not token or token.startswith("enc:"):
+            continue
+
+        return token
 
     # Fallback to system credential store
     return get_token_from_keychain()
@@ -160,7 +169,11 @@ def get_auth_token_source() -> str | None:
     """Get the name of the source that provided the auth token."""
     # Check environment variables first
     for var in AUTH_TOKEN_ENV_VARS:
-        if os.environ.get(var):
+        token = os.environ.get(var)
+        if not token:
+            continue
+        token = token.strip()
+        if token and not token.startswith("enc:"):
             return var
 
     # Check if token came from system credential store
@@ -312,6 +325,9 @@ def get_sdk_env_vars() -> dict[str, str]:
     for var in SDK_ENV_VARS:
         value = os.environ.get(var)
         if value:
+            value = value.strip()
+            if not value or value.startswith("enc:"):
+                continue
             env[var] = value
 
     # On Windows, auto-detect git-bash path if not already set
@@ -331,7 +347,8 @@ def ensure_claude_code_oauth_token() -> None:
     If not set but other auth tokens are available, copies the value
     to CLAUDE_CODE_OAUTH_TOKEN so the underlying SDK can use it.
     """
-    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+    existing = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if existing and existing.strip() and not existing.strip().startswith("enc:"):
         return
 
     token = get_auth_token()

@@ -120,13 +120,34 @@ export function registerSettingsHandlers(
       // Fixes bug where defaultModel was stuck at 'opus' regardless of profile selection
       if (!settings._migratedDefaultModelSync) {
         if (settings.selectedAgentProfile) {
-          const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === settings.selectedAgentProfile);
+          const allProfiles = [
+            ...DEFAULT_AGENT_PROFILES,
+            ...(settings.customAgentProfiles ?? [])
+          ];
+          const profile = allProfiles.find(p => p.id === settings.selectedAgentProfile);
           if (profile) {
-            settings.defaultModel = profile.model;
+            settings.defaultModel = profile.phaseModels?.coding ?? profile.model;
           }
         }
         settings._migratedDefaultModelSync = true;
         needsSave = true;
+      }
+
+      // Validate: If selectedAgentProfile no longer exists (e.g., deleted custom profile), fall back to auto.
+      if (settings.selectedAgentProfile) {
+        const allProfiles = [
+          ...DEFAULT_AGENT_PROFILES,
+          ...(settings.customAgentProfiles ?? [])
+        ];
+        const exists = allProfiles.some(p => p.id === settings.selectedAgentProfile);
+        if (!exists) {
+          settings.selectedAgentProfile = 'auto';
+          const autoProfile = DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto');
+          if (autoProfile) {
+            settings.defaultModel = autoProfile.phaseModels?.coding ?? autoProfile.model;
+          }
+          needsSave = true;
+        }
       }
 
       // Migration: Clear CLI tool paths that are from a different platform
@@ -189,11 +210,25 @@ export function registerSettingsHandlers(
         const currentSettings = { ...DEFAULT_APP_SETTINGS, ...savedSettings };
         const newSettings = { ...currentSettings, ...settings };
 
+        const allProfiles = [
+          ...DEFAULT_AGENT_PROFILES,
+          ...(newSettings.customAgentProfiles ?? [])
+        ];
+
+        // Validate selected profile still exists (handles deleting a custom profile).
+        if (newSettings.selectedAgentProfile && !allProfiles.some(p => p.id === newSettings.selectedAgentProfile)) {
+          newSettings.selectedAgentProfile = 'auto';
+          const autoProfile = DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto');
+          if (autoProfile) {
+            newSettings.defaultModel = autoProfile.phaseModels?.coding ?? autoProfile.model;
+          }
+        }
+
         // Sync defaultModel when agent profile changes (#414)
         if (settings.selectedAgentProfile) {
-          const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === settings.selectedAgentProfile);
+          const profile = allProfiles.find(p => p.id === newSettings.selectedAgentProfile);
           if (profile) {
-            newSettings.defaultModel = profile.model;
+            newSettings.defaultModel = profile.phaseModels?.coding ?? profile.model;
           }
         }
 

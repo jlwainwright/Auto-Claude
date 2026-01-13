@@ -161,7 +161,7 @@ export interface ColorThemeDefinition {
 export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'ultrathink';
 
 // Model type shorthand
-export type ModelTypeShort = 'haiku' | 'sonnet' | 'opus';
+export type ModelTypeShort = 'haiku' | 'sonnet' | 'opus' | 'glm-4.7' | 'glm-4.5-air';
 
 // Phase-based model configuration for Auto profile
 // Each phase can use a different model optimized for that task type
@@ -255,6 +255,8 @@ export interface AppSettings {
   onboardingCompleted?: boolean;
   // Selected agent profile for preset model/thinking configurations
   selectedAgentProfile?: string;
+  // User-defined agent profiles (stored in settings.json)
+  customAgentProfiles?: AgentProfile[];
   // Custom phase configuration for Auto profile (overrides defaults)
   customPhaseModels?: PhaseModelConfig;
   customPhaseThinking?: PhaseThinkingConfig;
