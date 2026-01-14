@@ -37,10 +37,16 @@ export const DEFAULT_APP_SETTINGS = {
   // Global API keys (used as defaults for all projects)
   globalClaudeOAuthToken: undefined as string | undefined,
   globalOpenAIApiKey: undefined as string | undefined,
+  globalZaiApiKey: undefined as string | undefined,
+  globalZaiBaseUrl: undefined as string | undefined,
   // Selected agent profile - defaults to 'auto' for per-phase optimized model selection
   selectedAgentProfile: 'auto',
-  // User-defined agent profiles (stored in settings.json)
-  customAgentProfiles: [],
+  customPhaseProviders: undefined as undefined | {
+    spec: 'claude' | 'zai';
+    planning: 'claude' | 'zai';
+    coding: 'claude' | 'zai';
+    qa: 'claude' | 'zai';
+  },
   // Changelog preferences (persisted between sessions)
   changelogFormat: 'keep-a-changelog' as const,
   changelogAudience: 'user-facing' as const,

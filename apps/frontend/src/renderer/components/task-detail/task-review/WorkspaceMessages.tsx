@@ -38,9 +38,13 @@ export function NoWorkspaceMessage({ task, onClose }: NoWorkspaceMessageProps) {
 
     setIsMarkingDone(true);
     try {
-      await persistTaskStatus(task.id, 'done');
-      // Auto-close modal after marking as done
-      onClose?.();
+      const result = await persistTaskStatus(task.id, 'done');
+      if (result.success) {
+        // Auto-close modal after marking as done
+        onClose?.();
+      } else {
+        console.error('Error marking task as done:', result.error);
+      }
     } catch (err) {
       console.error('Error marking task as done:', err);
     } finally {
@@ -115,7 +119,11 @@ export function StagedInProjectMessage({ task, projectPath, hasWorktree = false,
       }
 
       // Mark task as done
-      await persistTaskStatus(task.id, 'done');
+      const statusResult = await persistTaskStatus(task.id, 'done');
+      if (!statusResult.success) {
+        setError(statusResult.error || 'Failed to mark task as done');
+        return;
+      }
 
       // Auto-close modal after marking as done
       onClose?.();
@@ -132,8 +140,12 @@ export function StagedInProjectMessage({ task, projectPath, hasWorktree = false,
     setError(null);
 
     try {
-      await persistTaskStatus(task.id, 'done');
-      onClose?.();
+      const result = await persistTaskStatus(task.id, 'done');
+      if (result.success) {
+        onClose?.();
+      } else {
+        setError(result.error || 'Failed to mark as done');
+      }
     } catch (err) {
       console.error('Error marking task as done:', err);
       setError(err instanceof Error ? err.message : 'Failed to mark as done');

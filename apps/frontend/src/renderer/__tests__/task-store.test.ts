@@ -221,6 +221,39 @@ describe('Task Store', () => {
       expect(useTaskStore.getState().tasks[0].subtasks[0].status).toBe('completed');
     });
 
+    it('should support legacy plan schema (subtask_id/title)', () => {
+      useTaskStore.setState({
+        tasks: [createTestTask({ id: 'task-1', subtasks: [] })]
+      });
+
+      const plan = {
+        feature: 'Test Feature',
+        workflow_type: 'feature',
+        services_involved: [],
+        phases: [
+          {
+            phase: 1,
+            name: 'Phase 1',
+            type: 'implementation',
+            subtasks: [
+              { subtask_id: '1.1', title: 'Legacy title only', status: 'pending' }
+            ]
+          }
+        ],
+        final_acceptance: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        spec_file: 'spec.md'
+      } as unknown as ImplementationPlan;
+
+      useTaskStore.getState().updateTaskFromPlan('task-1', plan);
+
+      expect(useTaskStore.getState().tasks[0].subtasks).toHaveLength(1);
+      expect(useTaskStore.getState().tasks[0].subtasks[0].id).toBe('1.1');
+      expect(useTaskStore.getState().tasks[0].subtasks[0].description).toBe('Legacy title only');
+      expect(useTaskStore.getState().tasks[0].subtasks[0].status).toBe('pending');
+    });
+
     it('should extract subtasks from multiple phases', () => {
       useTaskStore.setState({
         tasks: [createTestTask({ id: 'task-1' })]

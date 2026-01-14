@@ -267,12 +267,32 @@ git log --oneline upstream/develop..HEAD
 
 ### Security Model
 
-Three-layer defense:
-1. **OS Sandbox** - Bash command isolation
-2. **Filesystem Permissions** - Operations restricted to project directory
-3. **Command Allowlist** - Dynamic allowlist from project analysis (security.py + project_analyzer.py)
+Auto Claude implements a comprehensive four-layer defense system to ensure safe agent operations:
 
-Security profile cached in `.auto-claude-security.json`.
+1. **OS Sandbox** - Bash command isolation through restricted shell environments
+2. **Filesystem Permissions** - Operations restricted to project directory with chroot-style isolation
+3. **Command Allowlist** - Dynamic allowlist from project analysis (security.py + project_analyzer.py)
+4. **Output Validation** - Pattern-based detection of dangerous operations before tool execution (NEW)
+
+**Output Validation System:**
+
+The output validation layer inspects all agent-generated tool calls (Bash, Write, Edit, WebFetch, WebSearch) before execution to catch potentially harmful operations:
+
+- **Pre-Execution Inspection**: All tool outputs pass through validation hooks before execution
+- **Pattern Detection**: Regex and literal pattern matching for dangerous operations (rm -rf, drop database, secret exposure, etc.)
+- **Configurable Rules**: Per-project configuration in `.auto-claude/output-validation.json` or `.yaml`
+- **Override Mechanism**: Time-limited and scope-limited override tokens for legitimate operations
+- **Clear Blocking Messages**: User-friendly explanations with actionable suggestions
+- **Comprehensive Logging**: All blocked operations logged with full context
+
+**Security Configuration:**
+
+- **Security Profile**: Cached in `.auto-claude-security.json` from project analysis
+- **Validation Config**: Per-project rules in `.auto-claude/output-validation.{json,yaml}`
+- **Override Tokens**: Stored in `.auto-claude/override-tokens.json` with expiry and usage tracking
+- **Validation Reports**: Generated per build session in `specs/XXX/validation-report.md`
+
+**For detailed configuration and rule documentation, see [guides/output-validation.md](guides/output-validation.md).**
 
 ### Claude Agent SDK Integration
 
@@ -370,7 +390,6 @@ The frontend uses `react-i18next` for internationalization. All labels, buttons,
 - `settings.json` - Settings page content
 - `dialogs.json` - Dialog boxes and modals
 - `tasks.json` - Task/spec related content
-- `errors.json` - Error messages (structured error information with substitution support)
 - `onboarding.json` - Onboarding wizard content
 - `welcome.json` - Welcome screen content
 
@@ -384,16 +403,6 @@ const { t } = useTranslation(['navigation', 'common']);
 // Use translation keys, NOT hardcoded strings
 <span>{t('navigation:items.githubPRs')}</span>  // ✅ CORRECT
 <span>GitHub PRs</span>                          // ❌ WRONG
-```
-
-**Error messages with substitution:**
-
-```tsx
-// For error messages with dynamic content, use interpolation
-const { t } = useTranslation(['errors']);
-
-// errors.json: { "task": { "parseError": "Failed to parse: {{error}}" } }
-<span>{t('errors:task.parseError', { error: errorMessage })}</span>
 ```
 
 **When adding new UI text:**

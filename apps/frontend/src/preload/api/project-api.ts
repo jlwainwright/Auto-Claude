@@ -11,7 +11,9 @@ import type {
   InfrastructureStatus,
   GraphitiValidationResult,
   GraphitiConnectionTestResult,
-  GitStatus
+  GitStatus,
+  MemoryGraphData,
+  MemoryStorageStats,
 } from '../../shared/types';
 
 // Tab state interface (persisted in main process)
@@ -43,6 +45,10 @@ export interface ProjectAPI {
   getMemoryStatus: (projectId: string) => Promise<IPCResult<unknown>>;
   searchMemories: (projectId: string, query: string) => Promise<IPCResult<unknown>>;
   getRecentMemories: (projectId: string, limit?: number) => Promise<IPCResult<unknown>>;
+  getGraphData: (projectId: string) => Promise<IPCResult<MemoryGraphData>>;
+  getMemoryStats: (projectId: string) => Promise<IPCResult<MemoryStorageStats>>;
+  deleteMemory: (projectId: string, memoryId: string) => Promise<IPCResult<void>>;
+  updateMemory: (projectId: string, memoryId: string, content: string) => Promise<IPCResult<void>>;
 
   // Environment Configuration
   getProjectEnv: (projectId: string) => Promise<IPCResult<ProjectEnvConfig>>;
@@ -185,6 +191,18 @@ export const createProjectAPI = (): ProjectAPI => ({
 
   getRecentMemories: (projectId: string, limit?: number) =>
     ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_GET_MEMORIES, projectId, limit),
+
+  getGraphData: (projectId: string): Promise<IPCResult<MemoryGraphData>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_GET_GRAPH_DATA, projectId),
+
+  getMemoryStats: (projectId: string): Promise<IPCResult<MemoryStorageStats>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_GET_MEMORY_STATS, projectId),
+
+  deleteMemory: (projectId: string, memoryId: string): Promise<IPCResult<void>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_DELETE_MEMORY, projectId, memoryId),
+
+  updateMemory: (projectId: string, memoryId: string, content: string): Promise<IPCResult<void>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_UPDATE_MEMORY, projectId, memoryId, content),
 
   // Environment Configuration
   getProjectEnv: (projectId: string): Promise<IPCResult<ProjectEnvConfig>> =>

@@ -358,37 +358,17 @@
     "phaseConfiguration": "Configuration par phase",
     "phaseConfigurationDescription": "Personnaliser le modèle et le niveau de réflexion pour chaque phase",
     "clickToCustomize": "Cliquer pour personnaliser",
+    "provider": "Fournisseur",
     "model": "Modèle",
     "thinking": "Réflexion",
     "thinkingLevel": "Niveau de réflexion",
+    "selectProvider": "Sélectionner un fournisseur",
     "selectModel": "Sélectionner un modèle",
     "selectThinkingLevel": "Sélectionner un niveau de réflexion",
     "perPhaseOptimization": "(optimisation par phase)",
     "resetToDefaults": "Réinitialiser par défaut",
     "resetToProfileDefaults": "Réinitialiser aux défauts de {{profile}}",
     "customized": "Personnalisé",
-    "customProfiles": {
-      "add": "Ajouter un profil personnalisé",
-      "addTitle": "Ajouter un profil personnalisé",
-      "editTitle": "Modifier le profil personnalisé",
-      "badge": "Perso",
-      "edit": "Modifier le profil",
-      "delete": "Supprimer le profil",
-      "deleteTitle": "Supprimer le profil personnalisé ?",
-      "deleteDescription": "Cela supprimera définitivement « {{name}} ».",
-      "dialogDescription": "Créez un préréglage enregistré que vous pouvez sélectionner comme profil d’agent par défaut.",
-      "readOnlyHint": "Pour personnaliser ce préréglage, créez un profil personnalisé.",
-      "fields": {
-        "name": "Nom",
-        "namePlaceholder": "ex : Codage GLM",
-        "description": "Description",
-        "descriptionPlaceholder": "Optionnel"
-      },
-      "validation": {
-        "nameRequired": "Le nom est requis.",
-        "saveFailed": "Échec de l’enregistrement du profil."
-      }
-    },
     "phaseConfigNote": "Ces paramètres seront utilisés par défaut lors de la création de nouvelles tâches avec ce profil. Vous pouvez les modifier par tâche dans l'assistant de création.",
     "phases": {
       "spec": {
@@ -459,18 +439,10 @@
     "apiKeysInfo": "Les clés définies ici sont utilisées par défaut. Les projets individuels peuvent les remplacer dans leurs paramètres.",
     "openaiKey": "Clé API OpenAI",
     "openaiKeyDescription": "Requise pour le backend mémoire Graphiti (embeddings)",
-    "toast": {
-      "authSuccess": "Profil authentifié",
-      "authSuccessWithEmail": "Connecté en tant que {{email}}",
-      "authSuccessGeneric": "Authentification terminée. Vous pouvez maintenant utiliser ce profil.",
-      "authStartFailed": "Échec de l'authentification",
-      "addProfileFailed": "Échec de l'ajout du profil",
-      "tokenSaved": "Token enregistré",
-      "tokenSavedDescription": "Votre token a été enregistré avec succès.",
-      "tokenSaveFailed": "Échec de l'enregistrement du token",
-      "settingsUpdateFailed": "Échec de la mise à jour des paramètres",
-      "tryAgain": "Veuillez réessayer."
-    }
+    "zaiKey": "Clé API Z.AI",
+    "zaiKeyDescription": "Utilisée pour les modèles Z.AI (GLM) lorsque ce fournisseur est sélectionné",
+    "zaiBaseUrl": "URL de base Z.AI",
+    "zaiBaseUrlDescription": "Remplacer l'endpoint OpenAI-compatible Z.AI par défaut (optionnel)"
   },
   "debug": {
     "title": "Debug & Logs",

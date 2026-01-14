@@ -7,9 +7,10 @@ memory updates, recovery tracking, and Linear integration.
 """
 
 import logging
+import traceback
 from pathlib import Path
+from typing import Any, AsyncIterator, Protocol
 
-from claude_agent_sdk import ClaudeSDKClient
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from insight_extractor import extract_session_insights
 from linear_updater import (
@@ -44,6 +45,16 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class AgentClient(Protocol):
+    async def __aenter__(self) -> "AgentClient": ...
+
+    async def __aexit__(self, exc_type, exc, tb) -> None: ...
+
+    async def query(self, message: str) -> None: ...
+
+    async def receive_response(self) -> AsyncIterator[Any]: ...
 
 
 async def post_session_processing(
@@ -312,17 +323,17 @@ async def post_session_processing(
 
 
 async def run_agent_session(
-    client: ClaudeSDKClient,
+    client: AgentClient,
     message: str,
     spec_dir: Path,
     verbose: bool = False,
     phase: LogPhase = LogPhase.CODING,
 ) -> tuple[str, str]:
     """
-    Run a single agent session using Claude Agent SDK.
+    Run a single agent session using the configured provider client.
 
     Args:
-        client: Claude SDK client
+        client: Provider client
         message: The prompt to send
         spec_dir: Spec directory path
         verbose: Whether to show detailed output
@@ -343,7 +354,7 @@ async def run_agent_session(
         prompt_length=len(message),
         prompt_preview=message[:200] + "..." if len(message) > 200 else message,
     )
-    print("Sending prompt to Claude Agent SDK...\n")
+    print("Sending prompt to agent client...\n")
 
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
@@ -353,7 +364,7 @@ async def run_agent_session(
 
     try:
         # Send the query
-        debug("session", "Sending query to Claude SDK...")
+        debug("session", "Sending query to agent client...")
         await client.query(message)
         debug_success("session", "Query sent successfully")
 
@@ -541,14 +552,24 @@ async def run_agent_session(
         return "continue", response_text
 
     except Exception as e:
+        tb = traceback.format_exc()
+        error_summary = f"Session error ({type(e).__name__}): {e}"
         debug_error(
             "session",
-            f"Session error: {e}",
+            error_summary,
             exception_type=type(e).__name__,
             message_count=message_count,
             tool_count=tool_count,
         )
         print(f"Error during agent session: {e}")
         if task_logger:
-            task_logger.log_error(f"Session error: {e}", phase)
+            task_logger.log_with_detail(
+                error_summary,
+                detail=tb,
+                entry_type=LogEntryType.ERROR,
+                phase=phase,
+                subphase="SESSION ERROR",
+                collapsed=True,
+                print_to_console=False,
+            )
         return "error", str(e)

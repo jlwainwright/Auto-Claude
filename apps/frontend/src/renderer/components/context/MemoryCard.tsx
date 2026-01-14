@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Clock,
   CheckCircle2,
@@ -8,11 +9,25 @@ import {
   AlertTriangle,
   Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Trash2,
+  Check
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
+import { Checkbox } from '../ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
+import { cn } from '../../lib/utils';
 import type { MemoryEpisode } from '../../../shared/types';
 import { memoryTypeIcons, memoryTypeColors, memoryTypeLabels } from './constants';
 import { formatDate } from './utils';
@@ -20,6 +35,11 @@ import { PRReviewCard } from './PRReviewCard';
 
 interface MemoryCardProps {
   memory: MemoryEpisode;
+  projectId?: string;
+  onDelete?: (memoryId: string) => void;
+  isSelected?: boolean;
+  onSelectionToggle?: (memoryId: string) => void;
+  selectionMode?: boolean;
 }
 
 interface ParsedSessionInsight {
@@ -106,8 +126,17 @@ function isPRReviewMemory(memory: MemoryEpisode): boolean {
   }
 }
 
-export function MemoryCard({ memory }: MemoryCardProps) {
+export function MemoryCard({
+  memory,
+  projectId,
+  onDelete,
+  isSelected = false,
+  onSelectionToggle,
+  selectionMode = false
+}: MemoryCardProps) {
+  const { t } = useTranslation(['context', 'common']);
   const [expanded, setExpanded] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const parsed = useMemo(() => parseMemoryContent(memory.content), [memory.content]);
 
   // Determine if there's meaningful content to show (must be called before early return)
@@ -143,12 +172,43 @@ export function MemoryCard({ memory }: MemoryCardProps) {
 
   const specId = parsed?.spec_id;
 
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(memory.id);
+    }
+    setDeleteDialogOpen(false);
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Only toggle selection if in selection mode and clicking on the card (not on buttons)
+    if (selectionMode && onSelectionToggle) {
+      // Check if the click target is not a button or interactive element
+      const target = e.target as HTMLElement;
+      if (!target.closest('button') && !target.closest('input') && !target.closest('a')) {
+        onSelectionToggle(memory.id);
+      }
+    }
+  };
+
   return (
-    <Card className="bg-muted/30 border-border/50 hover:border-border transition-colors">
+    <Card
+      className={cn(
+        "bg-muted/30 border-border/50 hover:border-border transition-colors",
+        isSelected && "ring-2 ring-accent bg-accent/5"
+      )}
+      onClick={handleCardClick}
+    >
       <CardContent className="pt-4 pb-4">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 flex-1 min-w-0">
+            {selectionMode && (
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => onSelectionToggle?.(memory.id)}
+                className="mt-1"
+              />
+            )}
             <div className="p-2 rounded-lg bg-accent/10">
               <Icon className="h-4 w-4 text-accent" />
             </div>
@@ -176,26 +236,39 @@ export function MemoryCard({ memory }: MemoryCardProps) {
               </div>
             </div>
           </div>
-          {hasContent && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpanded(!expanded)}
-              className="shrink-0 gap-1"
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                  Collapse
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Expand
-                </>
-              )}
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {onDelete && projectId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteDialogOpen(true)}
+                className="shrink-0 gap-1 text-muted-foreground hover:text-destructive"
+                title={t('memories.detail.delete')}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+            {hasContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(!expanded)}
+                className="shrink-0 gap-1"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    Collapse
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Expand
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Expanded Content */}
@@ -363,6 +436,27 @@ export function MemoryCard({ memory }: MemoryCardProps) {
           </pre>
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('memories.detail.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('memories.bulkActions.deleteConfirm', { count: 1 })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('memories.detail.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t('memories.detail.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

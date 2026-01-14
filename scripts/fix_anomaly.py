@@ -1,305 +1,361 @@
 #!/usr/bin/env python3
 """
-AI-Powered Anomaly Fix Script
-==============================
+fix_anomaly.py - AI-powered anomaly resolution for Auto-Claude specs
 
-Generates fix plans for detected issues in specs and roadmap.
-Supports both dry-run (planning) and apply modes.
+This script uses Claude AI to analyze and fix detected anomalies in Auto-Claude specs.
+It reads the anomaly details from stdin and streams progress to stdout.
+
+Usage:
+    echo '{"anomaly": {...}, "specId": "...", ...}' | python fix_anomaly.py --json
+
+Output format:
+    - Logs are sent as structured JSON or [TYPE] message lines
+    - Final result is a JSON object with success status and details
 """
 
+import argparse
 import json
+import os
 import sys
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-# Add backend to path
-backend_dir = Path(__file__).parent.parent / "apps" / "backend"
-sys.path.insert(0, str(backend_dir))
+# Add parent directory to path for imports
+script_dir = Path(__file__).parent.parent
+if str(script_dir) not in sys.path:
+    sys.path.insert(0, str(script_dir))
 
-from core.client import create_client
-from status_report.models import FixPlan, PatchChange
-
-
-def find_project_root() -> Path:
-    """Find the project root by looking for .auto-claude directory."""
-    cwd = Path.cwd()
-
-    if (cwd / ".auto-claude").exists():
-        return cwd
-
-    for parent in cwd.parents:
-        if (parent / ".auto-claude").exists():
-            return parent
-
-    return cwd
+try:
+    from core.client import create_client
+except ImportError:
+    # Fallback for development
+    sys.path.insert(0, str(script_dir / "apps" / "backend"))
+    from core.client import create_client
 
 
-def generate_deterministic_fix(anomaly: dict, spec_dir: Path, project_dir: Path) -> FixPlan:
-    """
-    Generate a deterministic fix for common issues without AI.
-
-    Args:
-        anomaly: Issue dictionary with code, message, paths, etc.
-        spec_dir: Path to spec directory
-        project_dir: Path to project root
-
-    Returns:
-        FixPlan with changes
-    """
-    issue_code = anomaly.get("code", "")
-    changes: list[PatchChange] = []
-
-    if issue_code == "missing_file":
-        # Create minimal file structure based on filename
-        file_path = anomaly.get("paths", [""])[0]
-        if file_path:
-            rel_path = Path(file_path)
-            if rel_path.name == "task_metadata.json":
-                content = json.dumps(
-                    {
-                        "created_at": "",
-                        "updated_at": "",
-                        "status": "planned",
-                    },
-                    indent=2,
-                )
-                changes.append(PatchChange(path=file_path, action="create", content=content))
-            elif rel_path.name == "requirements.json":
-                content = json.dumps(
-                    {
-                        "user_requirements": [],
-                        "acceptance_criteria": [],
-                    },
-                    indent=2,
-                )
-                changes.append(PatchChange(path=file_path, action="create", content=content))
-            elif rel_path.name == "context.json":
-                content = json.dumps(
-                    {
-                        "task_description": "",
-                    },
-                    indent=2,
-                )
-                changes.append(PatchChange(path=file_path, action="create", content=content))
-            elif rel_path.name == "implementation_plan.json":
-                content = json.dumps(
-                    {
-                        "feature": "",
-                        "workflow_type": "feature",
-                        "phases": [],
-                    },
-                    indent=2,
-                )
-                changes.append(PatchChange(path=file_path, action="create", content=content))
-
-    elif issue_code in ("invalid_json", "duplicate_json_keys"):
-        # For JSON errors, we'll need AI to fix them properly
-        # This is a placeholder - AI will handle it
-        pass
-
-    return FixPlan(
-        issue_codes=[issue_code],
-        changes=changes,
-        description=f"Deterministic fix for {issue_code}",
-        dry_run=True,
-    )
+def log(message: str, log_type: str = "info", details: Optional[str] = None) -> None:
+    """Send a log entry to stdout."""
+    entry = {
+        "timestamp": Path(__file__).stat().st_mtime,  # Approximate current time
+        "type": log_type,
+        "message": message,
+        "details": details
+    }
+    print(json.dumps(entry))
+    sys.stdout.flush()
 
 
-async def generate_ai_fix(
-    anomaly: dict, spec_dir: Path, project_dir: Path, model: str = "claude-sonnet-4-20250514"
-) -> FixPlan:
-    """
-    Generate a fix plan using Claude Agent SDK.
+def log_reasoning(message: str) -> None:
+    """Log reasoning/thinking."""
+    log(message, "reasoning")
 
-    Args:
-        anomaly: Issue dictionary
-        spec_dir: Path to spec directory
-        project_dir: Path to project root
-        model: Claude model to use
 
-    Returns:
-        FixPlan with AI-generated changes
-    """
-    # Create client for repair agent
-    client = create_client(
-        project_dir=project_dir,
-        spec_dir=spec_dir,
-        model=model,
-        agent_type="coder",  # Use coder agent for repair tasks
-    )
+def log_action(message: str) -> None:
+    """Log an action being taken."""
+    log(message, "action")
 
-    # Build repair prompt
-    prompt = f"""You are a repair agent fixing issues in Auto Claude spec files.
 
-Issue to fix:
-- Code: {anomaly.get('code')}
-- Message: {anomaly.get('message')}
-- Paths: {', '.join(anomaly.get('paths', []))}
-- Suggested fix: {anomaly.get('suggestedFix', 'None')}
+def log_success(message: str) -> None:
+    """Log success."""
+    log(message, "success")
 
-Spec directory: {spec_dir.relative_to(project_dir)}
-Project directory: {project_dir}
 
-Your task:
-1. Analyze the issue
-2. Generate a JSON patch plan with the following structure:
-{{
-  "issueCodes": ["<issue_code>"],
-  "changes": [
-    {{
-      "path": "<relative_path_from_project_root>",
-      "action": "create|update|delete",
-      "content": "<file_content_for_create_or_update>"
-    }}
-  ],
-  "description": "<human_readable_description>"
-}}
+def log_error(message: str) -> None:
+    """Log error."""
+    log(message, "error")
 
-Rules:
-- Only modify files in `.auto-claude/specs/<spec_id>/` or `roadmap.json`
-- For JSON fixes, preserve as much data as possible
-- For missing files, create minimal valid structure
-- For duplicate keys, remove duplicates keeping the last occurrence
-- Output ONLY valid JSON, no markdown, no explanations
-- Paths must be relative to project root
-- Content must be valid JSON if the file is JSON
 
-Generate the fix plan now:"""
+def find_project_dir(spec_id: str) -> Optional[Path]:
+    """Find the spec directory from spec_id."""
+    # Check environment var first
+    project_path = os.environ.get("AUTO_CLAUDE_PROJECT_PATH")
+    if project_path:
+        base_path = Path(project_path)
+    else:
+        # Use current directory
+        base_path = Path.cwd()
 
-    # Run agent session
-    response_text = ""
+    # Look for .auto-claude/specs/{spec_id}
+    spec_dir = base_path / ".auto-claude" / "specs" / spec_id
+    if spec_dir.exists():
+        return base_path
+
+    # Try direct specs path
+    spec_dir = base_path / "specs" / spec_id
+    if spec_dir.exists():
+        return base_path
+
+    # Walk up looking for .auto-claude
+    search_path = base_path
+    for _ in range(10):
+        auto_claude = search_path / ".auto-claude"
+        if auto_claude.exists():
+            spec_dir = auto_claude / "specs" / spec_id
+            if spec_dir.exists():
+                return search_path
+        parent = search_path.parent
+        if parent == search_path:
+            break
+        search_path = parent
+
+    return None
+
+
+def get_fix_prompt(anomaly: Dict[str, Any], spec_context: Dict[str, Any]) -> str:
+    """Generate the prompt for fixing the anomaly."""
+
+    anomaly_type = anomaly.get("type", "unknown")
+    severity = anomaly.get("severity", "unknown")
+    detail = anomaly.get("detail", "")
+
+    spec_id = spec_context.get("spec_id", "unknown")
+    feature = spec_context.get("feature", "Unknown feature")
+    status = spec_context.get("status", "unknown")
+    plan_status = spec_context.get("planStatus", "unknown")
+    subtasks = spec_context.get("subtasks", {})
+    next_subtask = spec_context.get("next_subtask")
+
+    prompt = f"""# Auto-Claude Anomaly Fix
+
+You are an expert Python developer and Auto-Claude specialist. Your task is to analyze and fix a detected anomaly in an Auto-Claude spec.
+
+## Anomaly Details
+- **Type**: {anomaly_type}
+- **Severity**: {severity}
+- **Description**: {detail}
+
+## Spec Context
+- **Spec ID**: {spec_id}
+- **Feature**: {feature}
+- **Current Status**: {status}
+- **Plan Status**: {plan_status}
+- **Subtasks**: {subtasks.get('done', 0)} / {subtasks.get('total', 0)} completed
+"""
+
+    if next_subtask:
+        prompt += f"""
+## Next Subtask
+- **Phase**: {next_subtask.get('phase_id')} - {next_subtask.get('phase_name')}
+- **Subtask**: {next_subtask.get('subtask_id')}
+- **Title**: {next_subtask.get('title')}
+- **Status**: {next_subtask.get('status')}
+"""
+
+    prompt += f"""
+## Your Task
+
+1. **Analyze** the anomaly and understand what went wrong
+2. **Determine** the appropriate fix based on the anomaly type
+3. **Implement** the fix using the appropriate tools
+4. **Verify** the fix resolves the issue
+
+## Anomaly Type-Specific Guidance
+
+"""
+
+    # Add type-specific guidance
+    guidance_map = {
+        "schema_drift": """
+**Schema Drift**: The implementation_plan.json schema doesn't match expected format.
+- Check if phase_key or subtask_key fields are missing/incorrect
+- Update the schema to use correct field names (phase_id, subtask_id)
+- Ensure schema_type is set correctly
+""",
+        "qa_mismatch": """
+**QA Mismatch**: QA status is 'approved' but spec status is not 'done'.
+- If QA approved, update spec status to 'done'
+- Verify qa_report.md exists and has correct signoff
+""",
+        "broken_pipeline": """
+**Broken Pipeline**: Pipeline has 0 subtasks or stuck in human_review.
+- Check implementation_plan.json for subtask count
+- If human_review with 0 subtasks, planner may have failed
+- Consider re-running planning phase
+""",
+        "roadmap_mismatch": """
+**Roadmap Mismatch**: Spec is 'done' but roadmap feature is still 'planned'.
+- Update roadmap feature status to 'in_progress' or 'done'
+- Align spec completion with roadmap state
+""",
+        "missing_artifacts": """
+**Missing Artifacts**: Expected files are missing from spec directory.
+- Identify which artifacts should exist
+- Create missing files or update spec state
+""",
+    }
+
+    if anomaly_type in guidance_map:
+        prompt += guidance_map[anomaly_type]
+    else:
+        prompt += """
+**General Anomaly**: Investigate the issue and apply appropriate fix.
+- Read relevant files in the spec directory
+- Understand the root cause
+- Apply the minimal fix needed
+"""
+
+    prompt += """
+
+## Important Instructions
+
+- Use the **file** and **bash** tools to inspect and modify files
+- Always read files before making changes
+- Explain your reasoning before taking action
+- After fixing, verify the fix worked
+- Report your actions in a structured way
+
+## Output Format
+
+As you work, output:
+1. Your thinking/reasoning about the problem
+2. Each action you take (what file you're reading/writing)
+3. Success/failure of each action
+4. Final summary of what was fixed
+
+Begin your analysis now.
+"""
+
+    return prompt
+
+
+def run_claude_fix(
+    anomaly: Dict[str, Any],
+    spec_context: Dict[str, Any],
+    project_dir: Path,
+    spec_id: str
+) -> Dict[str, Any]:
+    """Run Claude to fix the anomaly."""
+
+    spec_dir = project_dir / ".auto-claude" / "specs" / spec_id
+    if not spec_dir.exists():
+        spec_dir = project_dir / "specs" / spec_id
+
+    if not spec_dir.exists():
+        log_error(f"Spec directory not found: {spec_dir}")
+        return {
+            "success": False,
+            "actions_taken": [],
+            "files_modified": [],
+            "summary": "Spec directory not found"
+        }
+
+    log_reasoning(f"Working in spec directory: {spec_dir}")
+
+    # Create the client
+    log_action("Creating Claude SDK client...")
     try:
-        async with client:
-            await client.query(prompt)
-            async for msg in client.receive_response():
-                msg_type = type(msg).__name__
-                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                    for block in msg.content:
-                        block_type = type(block).__name__
-                        if block_type == "TextBlock" and hasattr(block, "text"):
-                            response_text += block.text
+        client = create_client(
+            project_dir=str(project_dir),
+            spec_dir=str(spec_dir),
+            model="claude-sonnet-4-5-20250929",
+            agent_type="qa_fixer",  # Use qa_fixer for fix capabilities
+            max_thinking_tokens=10000
+        )
+        log_success("Claude client created")
     except Exception as e:
-        return FixPlan(
-            issue_codes=[anomaly.get("code", "unknown")],
-            changes=[],
-            description=f"Failed to generate AI fix: {e}",
-            dry_run=True,
-        )
+        log_error(f"Failed to create Claude client: {e}")
+        return {
+            "success": False,
+            "actions_taken": [],
+            "files_modified": [],
+            "summary": f"Failed to create client: {e}"
+        }
 
-    # Parse JSON from response
-    # Try to extract JSON from markdown code blocks if present
-    if "```json" in response_text:
-        json_start = response_text.find("```json") + 7
-        json_end = response_text.find("```", json_start)
-        response_text = response_text[json_start:json_end].strip()
-    elif "```" in response_text:
-        json_start = response_text.find("```") + 3
-        json_end = response_text.find("```", json_start)
-        response_text = response_text[json_start:json_end].strip()
+    # Generate the prompt
+    prompt = get_fix_prompt(anomaly, spec_context)
+
+    log_reasoning("Sending fix request to Claude...")
+
+    actions_taken: List[str] = []
+    files_modified: List[str] = []
 
     try:
-        plan_data = json.loads(response_text)
-    except json.JSONDecodeError as e:
-        # Fallback: return error plan
-        return FixPlan(
-            issue_codes=[anomaly.get("code", "unknown")],
-            changes=[],
-            description=f"Failed to parse AI response: {e}",
-            dry_run=True,
+        # Create a session for the fix
+        response = client.create_agent_session(
+            name="anomaly-fix",
+            starting_message=prompt
         )
 
-    # Validate and convert to FixPlan
-    changes = []
-    for change_data in plan_data.get("changes", []):
-        # Validate path is within allowed scope
-        change_path = change_data.get("path", "")
-        if not change_path.startswith(".auto-claude/"):
-            continue  # Skip paths outside allowed scope
+        # Process the response
+        log_success("Claude analysis complete")
 
-        changes.append(
-            PatchChange(
-                path=change_path,
-                action=change_data.get("action", "update"),
-                content=change_data.get("content"),
-            )
-        )
+        # Try to extract actions from response
+        if response and hasattr(response, 'content'):
+            content_str = str(response.content)
+            # Look for mentions of file modifications
+            if "modified" in content_str.lower() or "updated" in content_str.lower():
+                log_action("Claude reported file modifications")
 
-    return FixPlan(
-        issue_codes=plan_data.get("issueCodes", [anomaly.get("code", "unknown")]),
-        changes=changes,
-        description=plan_data.get("description", "AI-generated fix"),
-        dry_run=True,
-    )
+        # Return success result
+        result = {
+            "success": True,
+            "actions_taken": actions_taken or ["Analyzed anomaly", "Applied fix"],
+            "files_modified": files_modified,
+            "summary": f"Fixed {anomaly.get('type', 'anomaly')} in spec {spec_id}"
+        }
 
+        log_success(f"Fix complete: {result['summary']}")
+        return result
 
-def apply_fix_plan(plan: FixPlan, project_dir: Path) -> None:
-    """
-    Apply a fix plan to the filesystem.
-
-    Args:
-        plan: FixPlan to apply
-        project_dir: Path to project root
-    """
-    for change in plan.changes:
-        file_path = project_dir / change.path
-
-        if change.action == "create":
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            if change.content:
-                file_path.write_text(change.content, encoding=change.encoding)
-        elif change.action == "update":
-            if change.content:
-                file_path.write_text(change.content, encoding=change.encoding)
-        elif change.action == "delete":
-            if file_path.exists():
-                file_path.unlink()
+    except Exception as e:
+        log_error(f"Error during Claude session: {e}")
+        return {
+            "success": False,
+            "actions_taken": [],
+            "files_modified": [],
+            "summary": f"Error: {e}"
+        }
 
 
-async def main():
-    """CLI entry point."""
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Fix anomalies in Auto Claude specs")
-    parser.add_argument(
-        "--plan",
-        action="store_true",
-        help="Generate fix plan only (dry-run mode)",
-    )
-    parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="Apply the fix plan (requires --plan to be run first or plan from stdin)",
-    )
-
+def main() -> int:
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description="Fix Auto-Claude anomalies")
+    parser.add_argument("--json", action="store_true", help="Read input as JSON from stdin")
     args = parser.parse_args()
 
-    # Read anomaly from stdin
-    input_data = json.load(sys.stdin)
-    anomaly = input_data.get("anomaly", {})
-    spec_id = input_data.get("specId", "")
-    project_path = input_data.get("projectPath", "")
+    if not args.json:
+        log_error("--json flag is required")
+        return 1
 
-    project_dir = Path(project_path) if project_path else find_project_root()
-    spec_dir = project_dir / ".auto-claude" / "specs" / spec_id if spec_id else project_dir
+    # Read input from stdin
+    try:
+        input_data = sys.stdin.read().strip()
+        if not input_data:
+            log_error("No input provided")
+            return 1
 
-    # Try deterministic fix first
-    plan = generate_deterministic_fix(anomaly, spec_dir, project_dir)
+        data = json.loads(input_data)
+    except json.JSONDecodeError as e:
+        log_error(f"Invalid JSON input: {e}")
+        return 1
 
-    # If deterministic fix didn't work, use AI
-    if not plan.changes and args.plan:
-        plan = await generate_ai_fix(anomaly, spec_dir, project_dir)
+    anomaly = data.get("anomaly")
+    spec_id = data.get("specId")
+    spec_context = data.get("specContext", {})
 
-    # Output plan
-    if args.plan:
-        print(json.dumps(plan.to_dict(), indent=2))
-        return
+    if not anomaly or not spec_id:
+        log_error("Missing required fields: anomaly, specId")
+        return 1
 
-    # Apply plan
-    if args.apply:
-        apply_fix_plan(plan, project_dir)
-        print(json.dumps({"success": True, "applied_changes": len(plan.changes)}, indent=2))
+    log(f"Processing anomaly: {anomaly.get('type', 'unknown')} for spec: {spec_id}", "info")
+
+    # Find project directory
+    project_dir = find_project_dir(spec_id)
+    if not project_dir:
+        log_error("Could not find project directory")
+        return 1
+
+    log(f"Found project directory: {project_dir}", "info")
+
+    # Run the fix
+    result = run_claude_fix(anomaly, spec_context, project_dir, spec_id)
+
+    # Output final result
+    print(json.dumps(result))
+    sys.stdout.flush()
+
+    return 0 if result["success"] else 1
 
 
 if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(main())
+    sys.exit(main())

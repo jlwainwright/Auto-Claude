@@ -57,12 +57,14 @@ class IdeationGenerator:
         project_dir: Path,
         output_dir: Path,
         model: str = "sonnet",  # Changed from "opus" (fix #433)
+        provider: str | None = None,
         thinking_level: str = "medium",
         max_ideas_per_type: int = 5,
     ):
         self.project_dir = Path(project_dir)
         self.output_dir = Path(output_dir)
         self.model = model
+        self.provider = provider
         self.thinking_level = thinking_level
         self.thinking_budget = get_thinking_budget(thinking_level)
         self.max_ideas_per_type = max_ideas_per_type
@@ -90,11 +92,12 @@ class IdeationGenerator:
         if additional_context:
             prompt += f"\n{additional_context}\n"
 
-        # Create client with thinking budget
+        # Create client with thinking budget and provider
         client = create_client(
             self.project_dir,
             self.output_dir,
             resolve_model_id(self.model),
+            provider=self.provider,
             max_thinking_tokens=self.thinking_budget,
         )
 
@@ -188,6 +191,7 @@ Write the fixed JSON to the file now.
             self.project_dir,
             self.output_dir,
             resolve_model_id(self.model),
+            provider=self.provider,
             max_thinking_tokens=self.thinking_budget,
         )
 

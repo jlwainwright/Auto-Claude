@@ -42,7 +42,6 @@ export const IPC_CHANNELS = {
   TASK_LIST_WORKTREES: 'task:listWorktrees',
   TASK_ARCHIVE: 'task:archive',
   TASK_UNARCHIVE: 'task:unarchive',
-  TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
@@ -170,6 +169,10 @@ export const IPC_CHANNELS = {
   CONTEXT_MEMORY_STATUS: 'context:memoryStatus',
   CONTEXT_SEARCH_MEMORIES: 'context:searchMemories',
   CONTEXT_GET_MEMORIES: 'context:getMemories',
+  CONTEXT_GET_GRAPH_DATA: 'context:getGraphData',
+  CONTEXT_GET_MEMORY_STATS: 'context:getMemoryStats',
+  CONTEXT_DELETE_MEMORY: 'context:deleteMemory',
+  CONTEXT_UPDATE_MEMORY: 'context:updateMemory',
 
   // Environment configuration
   ENV_GET: 'env:get',
@@ -516,7 +519,17 @@ export const IPC_CHANNELS = {
   GET_SENTRY_CONFIG: 'sentry:get-config',        // Get full Sentry config (DSN + sample rates)
 
   // Status Report operations
-  STATUS_REPORT_GENERATE: 'statusReport:generate',
-  STATUS_REPORT_ANOMALY_FIX_PLAN: 'statusReport:anomalyFixPlan',
-  STATUS_REPORT_ANOMALY_FIX_APPLY: 'statusReport:anomalyFixApply'
+  STATUS_REPORT_GENERATE: 'statusReport:generate',           // Generate status report JSON
+  STATUS_REPORT_GET_SUMMARY: 'statusReport:getSummary',     // Get quick summary only
+
+  // Anomaly Fix operations (AI-powered resolution)
+  ANOMALY_FIX_START: 'anomaly:fix:start',                   // Start AI fix for an anomaly
+  ANOMALY_FIX_CANCEL: 'anomaly:fix:cancel',                 // Cancel running fix
+  ANOMALY_FIX_GET_STATE: 'anomaly:fix:getState',            // Get current fix state
+
+  // Anomaly Fix events (main -> renderer)
+  ANOMALY_FIX_LOG: 'anomaly:fix:log',                       // Streaming log entry
+  ANOMALY_FIX_PROGRESS: 'anomaly:fix:progress',             // Progress update
+  ANOMALY_FIX_COMPLETE: 'anomaly:fix:complete',             // Fix completed
+  ANOMALY_FIX_ERROR: 'anomaly:fix:error',                   // Fix failed
 } as const;

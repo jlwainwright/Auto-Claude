@@ -94,7 +94,7 @@ elif dev_env_file.exists():
     load_dotenv(dev_env_file)
 
 from debug import debug, debug_error, debug_section, debug_success
-from phase_config import resolve_model_id
+from phase_config import load_task_metadata, resolve_model_id
 from review import ReviewState
 from spec import SpecOrchestrator
 from ui import Icons, highlight, muted, print_section, print_status
@@ -166,6 +166,12 @@ Examples:
         type=str,
         default="sonnet",
         help="Model to use for agent phases (haiku, sonnet, opus, or full model ID)",
+    )
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        help="Provider to use for spec creation (claude, zai, or OpenAI-compatible)",
     )
     parser.add_argument(
         "--thinking-level",
@@ -251,8 +257,17 @@ Examples:
                 project_dir = parent
                 break
 
+    provider = args.provider or os.environ.get("AUTO_BUILD_PROVIDER")
+
+    # If a spec directory was provided (UI-created task), prefer provider from task metadata
+    if not provider and args.spec_dir:
+        metadata = load_task_metadata(args.spec_dir)
+        if metadata:
+            phase_providers = metadata.get("phaseProviders") or {}
+            provider = phase_providers.get("spec") or metadata.get("provider")
+
     # Resolve model shorthand to full model ID
-    resolved_model = resolve_model_id(args.model)
+    resolved_model = resolve_model_id(args.model, provider)
 
     debug(
         "spec_runner",
@@ -260,6 +275,7 @@ Examples:
         project_dir=str(project_dir),
         task_description=task_description[:200] if task_description else None,
         model=resolved_model,
+        provider=provider,
         thinking_level=args.thinking_level,
         complexity_override=args.complexity,
         use_ai_assessment=not args.no_ai_assessment,
@@ -273,6 +289,7 @@ Examples:
         spec_name=args.continue_spec,
         spec_dir=args.spec_dir,
         model=resolved_model,
+        provider=provider,
         thinking_level=args.thinking_level,
         complexity_override=args.complexity,
         use_ai_assessment=not args.no_ai_assessment,
@@ -342,6 +359,14 @@ Examples:
             if args.base_branch:
                 run_cmd.extend(["--base-branch", args.base_branch])
 
+            # Pass provider only if task metadata doesn't define phase providers
+            metadata = load_task_metadata(orchestrator.spec_dir)
+            has_provider_config = bool(
+                metadata
+                and (metadata.get("phaseProviders") or metadata.get("provider"))
+            )
+            if provider and not has_provider_config:
+                run_cmd.extend(["--provider", provider])
             # Pass --direct flag if specified (skip worktree isolation)
             if args.direct:
                 run_cmd.append("--direct")

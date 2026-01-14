@@ -60,6 +60,7 @@ async def run_qa_validation_loop(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None = None,
     verbose: bool = False,
 ) -> bool:
     """
@@ -79,7 +80,8 @@ async def run_qa_validation_loop(
     Args:
         project_dir: Project root directory
         spec_dir: Spec directory
-        model: Claude model to use
+        model: Model to use
+        provider: Provider identifier (claude, zai, or OpenAI-compatible)
         verbose: Whether to show detailed output
 
     Returns:
@@ -90,12 +92,18 @@ async def run_qa_validation_loop(
     os.environ[PROJECT_DIR_ENV_VAR] = str(project_dir.resolve())
 
     debug_section("qa_loop", "QA Validation Loop")
+    from phase_config import get_phase_model, get_phase_provider
+
+    qa_provider = get_phase_provider(spec_dir, "qa", provider)
+    qa_model = get_phase_model(spec_dir, "qa", model, provider)
+
     debug(
         "qa_loop",
         "Starting QA validation loop",
         project_dir=str(project_dir),
         spec_dir=str(spec_dir),
-        model=model,
+        model=qa_model,
+        provider=qa_provider,
         max_iterations=MAX_QA_ITERATIONS,
     )
 
@@ -139,14 +147,14 @@ async def run_qa_validation_loop(
         emit_phase(ExecutionPhase.QA_FIXING, "Processing human feedback")
         print("\n📝 Human feedback detected. Running QA Fixer first...")
 
-        # Get model and thinking budget for fixer (uses QA phase config)
-        qa_model = get_phase_model(spec_dir, "qa", model)
+        # Get thinking budget for fixer (uses QA phase config)
         fixer_thinking_budget = get_phase_thinking_budget(spec_dir, "qa")
 
         fix_client = create_client(
             project_dir,
             spec_dir,
             qa_model,
+            provider=qa_provider,
             agent_type="qa_fixer",
             max_thinking_tokens=fixer_thinking_budget,
         )
@@ -218,7 +226,6 @@ async def run_qa_validation_loop(
         )
 
         # Run QA reviewer with phase-specific model and thinking budget
-        qa_model = get_phase_model(spec_dir, "qa", model)
         qa_thinking_budget = get_phase_thinking_budget(spec_dir, "qa")
         debug(
             "qa_loop",
@@ -230,6 +237,7 @@ async def run_qa_validation_loop(
             project_dir,
             spec_dir,
             qa_model,
+            provider=qa_provider,
             agent_type="qa_reviewer",
             max_thinking_tokens=qa_thinking_budget,
         )
@@ -317,16 +325,15 @@ async def run_qa_validation_loop(
                 issues=current_issues[:3] if current_issues else [],  # Show first 3
             )
 
-            # Check for recurring issues BEFORE recording current iteration
-            # This prevents the current issues from matching themselves in history
+            # Record rejected iteration
+            record_iteration(
+                spec_dir, qa_iteration, "rejected", current_issues, iteration_duration
+            )
+
+            # Check for recurring issues
             history = get_iteration_history(spec_dir)
             has_recurring, recurring_issues = has_recurring_issues(
                 current_issues, history
-            )
-
-            # Record rejected iteration AFTER checking for recurring issues
-            record_iteration(
-                spec_dir, qa_iteration, "rejected", current_issues, iteration_duration
             )
 
             if has_recurring:
@@ -388,6 +395,7 @@ async def run_qa_validation_loop(
                 project_dir,
                 spec_dir,
                 qa_model,
+                provider=qa_provider,
                 agent_type="qa_fixer",
                 max_thinking_tokens=fixer_thinking_budget,
             )

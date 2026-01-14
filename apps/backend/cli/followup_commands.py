@@ -220,6 +220,7 @@ def handle_followup_command(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None,
     verbose: bool = False,
 ) -> None:
     """
@@ -235,6 +236,11 @@ def handle_followup_command(
     from agent import run_followup_planner
 
     from .utils import print_banner, validate_environment
+
+    from phase_config import get_phase_model, get_phase_provider
+
+    planning_provider = get_phase_provider(spec_dir, "planning", provider)
+    planning_model = get_phase_model(spec_dir, "planning", model, provider)
 
     print_banner()
     print(f"\nFollow-up request for: {spec_dir.name}")
@@ -325,7 +331,7 @@ def handle_followup_command(
     # Now run the follow-up planner to add new subtasks
     print()
 
-    if not validate_environment(spec_dir):
+    if not validate_environment(spec_dir, planning_provider):
         sys.exit(1)
 
     try:
@@ -333,7 +339,8 @@ def handle_followup_command(
             run_followup_planner(
                 project_dir=project_dir,
                 spec_dir=spec_dir,
-                model=model,
+                model=planning_model,
+                provider=provider,
                 verbose=verbose,
             )
         )

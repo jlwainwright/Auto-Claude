@@ -8,15 +8,21 @@ import { SettingsSection } from './SettingsSection';
 import { AgentProfileSettings } from './AgentProfileSettings';
 import {
   AVAILABLE_MODELS,
+  AVAILABLE_ZAI_MODELS,
+  AVAILABLE_PROVIDERS,
+  PROVIDER_MODELS_MAP,
   THINKING_LEVELS,
   DEFAULT_FEATURE_MODELS,
   DEFAULT_FEATURE_THINKING,
+  DEFAULT_FEATURE_PROVIDERS,
   FEATURE_LABELS
 } from '../../../shared/constants';
 import type {
   AppSettings,
   FeatureModelConfig,
   FeatureThinkingConfig,
+  FeatureProvider,
+  FeatureProviderConfig,
   ModelTypeShort,
   ThinkingLevel,
   ToolDetectionResult
@@ -177,6 +183,10 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
               {(Object.keys(FEATURE_LABELS) as Array<keyof FeatureModelConfig>).map((feature) => {
                 const featureModels = settings.featureModels || DEFAULT_FEATURE_MODELS;
                 const featureThinking = settings.featureThinking || DEFAULT_FEATURE_THINKING;
+                const featureProviders = settings.featureProviders || DEFAULT_FEATURE_PROVIDERS;
+                const featureProvider = featureProviders[feature];
+                const isZaiProvider = featureProvider === 'zai';
+                const modelOptions = isZaiProvider ? AVAILABLE_ZAI_MODELS : AVAILABLE_MODELS;
 
                 return (
                   <div key={feature} className="space-y-2">
@@ -188,7 +198,47 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                         {FEATURE_LABELS[feature].description}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 max-w-md">
+                    <div className="grid grid-cols-3 gap-3 max-w-md">
+                      {/* Provider Select */}
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">{t('general.provider')}</Label>
+                        <Select
+                          value={featureProvider}
+                          onValueChange={(value) => {
+                            const newFeatureProviders = { ...featureProviders, [feature]: value as FeatureProvider };
+                            // Auto-switch model when provider changes
+                            const currentModel = featureModels[feature];
+                            const isClaudeModel = AVAILABLE_MODELS.some((m) => m.value === currentModel);
+                            const isZaiModel = AVAILABLE_ZAI_MODELS.some((m) => m.value === currentModel);
+                            let newFeatureModels = { ...featureModels };
+
+                            if (value === 'zai' && !isZaiModel) {
+                              // Switch to first ZAI model if current model is not ZAI
+                              newFeatureModels[feature] = AVAILABLE_ZAI_MODELS[0].value as ModelTypeShort;
+                            } else if (value === 'claude' && !isClaudeModel) {
+                              // Switch to default Claude model if current model is not Claude
+                              newFeatureModels[feature] = DEFAULT_FEATURE_MODELS[feature];
+                            }
+
+                            onSettingsChange({
+                              ...settings,
+                              featureProviders: newFeatureProviders,
+                              featureModels: newFeatureModels
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {AVAILABLE_PROVIDERS.map((provider) => (
+                              <SelectItem key={provider.value} value={provider.value}>
+                                {provider.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       {/* Model Select */}
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">{t('general.model')}</Label>
@@ -203,7 +253,7 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {AVAILABLE_MODELS.map((m) => (
+                            {modelOptions.map((m) => (
                               <SelectItem key={m.value} value={m.value}>
                                 {m.label}
                               </SelectItem>

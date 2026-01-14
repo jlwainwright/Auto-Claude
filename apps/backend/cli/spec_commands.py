@@ -14,7 +14,10 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 from progress import count_subtasks
+from ui import Icons, muted, icon, print_status
 from workspace import get_existing_build_worktree
+
+from security.input_screener import InputScreener, ScreeningVerdict
 
 from .utils import get_specs_dir
 
@@ -92,6 +95,104 @@ def list_specs(project_dir: Path) -> list[dict]:
     return specs
 
 
+def _screen_quickstart_input(task: str, project_dir: Path) -> str | None:
+    """
+    Screen quick-start task input for security threats.
+
+    Args:
+        task: The task description to screen
+        project_dir: Project root directory
+
+    Returns:
+        The task if safe, None if rejected
+    """
+    if not task or not task.strip():
+        return task
+
+    try:
+        # Initialize screener with project directory
+        screener = InputScreener(project_dir=str(project_dir))
+
+        # Screen the input
+        result = screener.screen_input(task)
+
+        # Check if input is safe
+        if result.verdict == ScreeningVerdict.REJECTED:
+            print()
+            print_status("Input rejected by security screening", "error")
+            print()
+            print(f"  {muted('Reason:')} {result.reason}")
+            print()
+
+            # Show detected patterns if available
+            if result.detected_patterns:
+                print(f"  {muted('Detected patterns:')}")
+                for pattern in result.detected_patterns[:5]:  # Show first 5
+                    severity_icon = {
+                        "critical": icon(Icons.ERROR),
+                        "high": icon(Icons.ERROR),
+                        "medium": icon(Icons.WARNING),
+                        "low": icon(Icons.WARNING),
+                    }.get(pattern.severity, icon(Icons.WARNING))
+
+                    print(
+                        f"    {severity_icon} {pattern.name} "
+                        f"[{pattern.severity}]"
+                    )
+
+                if len(result.detected_patterns) > 5:
+                    more_count = len(result.detected_patterns) - 5
+                    print(
+                        f"    {muted(f'... and {more_count} more')}"
+                    )
+
+            print()
+            print(
+                f"  {muted('If this is a false positive, please report it:')}"
+            )
+            print(f"  {muted('https://github.com/Andymik90/auto-claude/issues')}"
+            )
+            print()
+
+            return None  # Signal rejection
+
+        elif result.verdict == ScreeningVerdict.SUSPICIOUS:
+            # Suspicious but not rejected - warn user but continue
+            print()
+            print_status(
+                "Warning: Input contains potentially suspicious patterns",
+                "warning",
+            )
+            print(f"  {muted('Reason:')} {result.reason}")
+            print()
+
+            # Ask user if they want to continue
+            print("  Do you want to continue anyway?")
+            print(f"    {icon(Icons.POINTER)} Enter 'yes' to continue, or press Enter to cancel")
+
+            try:
+                confirm = input("  > ").strip().lower()
+                if confirm not in ["yes", "y"]:
+                    print_status("Cancelled.", "warning")
+                    return None
+            except (KeyboardInterrupt, EOFError):
+                print()
+                print_status("Cancelled.", "warning")
+                return None
+
+        # Input is safe or user accepted suspicious input
+        return task
+
+    except Exception as e:
+        # If screening fails, log error but allow input through
+        # (fail-open to not block legitimate work)
+        print()
+        print_status(f"Security screening error: {e}", "warning")
+        print(f"  {muted('Continuing with input...')}")
+        print()
+        return task
+
+
 def print_specs_list(project_dir: Path, auto_create: bool = True) -> None:
     """Print a formatted list of all specs.
 
@@ -131,14 +232,20 @@ def print_specs_list(project_dir: Path, auto_create: bool = True) -> None:
                     return
 
                 if task:
+                    # Screen input for security before launching spec_runner
+                    screened_task = _screen_quickstart_input(task, project_dir)
+                    if screened_task is None:
+                        # Input was rejected by screening
+                        return
+
                     # Direct mode: create spec and start building
-                    print(f"\nStarting build for: {task}\n")
+                    print(f"\nStarting build for: {screened_task}\n")
                     subprocess.run(
                         [
                             python_path,
                             str(spec_runner),
                             "--task",
-                            task,
+                            screened_task,
                             "--complexity",
                             "simple",
                             "--auto-approve",

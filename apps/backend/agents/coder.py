@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 
 from core.client import create_client
-from core.file_utils import write_json_atomic
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -70,71 +69,12 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 
-def _is_non_retryable_session_error(error_text: str) -> bool:
-    """
-    Return True when an agent session error should NOT be auto-retried.
-
-    Rationale: Some provider errors (billing/quota/auth) will never succeed on retry and
-    otherwise cause an infinite retry loop in auto-continue mode.
-    """
-    if not error_text:
-        return False
-
-    lower = error_text.lower()
-
-    # Z.AI / OpenAI-compatible billing/quota errors (common payload: code 1113).
-    if "insufficient balance" in lower or "no resource package" in lower:
-        return True
-    if '"code":"1113"' in lower or "code 1113" in lower:
-        return True
-
-    # Misconfiguration errors that require user action.
-    if "zai_api_key is required" in lower:
-        return True
-
-    # Generic "quota" / "billing" signals across providers.
-    if "insufficient_quota" in lower or "quota" in lower and "insufficient" in lower:
-        return True
-
-    return False
-
-
-def _persist_fatal_error_to_plan(spec_dir: Path, message: str) -> None:
-    """
-    Persist a fatal error to implementation_plan.json so the UI can show an error state.
-    Best-effort; failures here should never crash the runner.
-    """
-    plan_file = spec_dir / "implementation_plan.json"
-    if not plan_file.exists():
-        return
-
-    try:
-        import json
-        from datetime import datetime, timezone
-
-        plan = json.loads(plan_file.read_text(encoding="utf-8"))
-        now = datetime.now(timezone.utc).isoformat()
-
-        plan["status"] = "error"
-        plan["updated_at"] = now
-        plan["last_updated"] = now
-        # Keep planStatus valid-ish for consumers; UI primarily keys off status.
-        plan["planStatus"] = plan.get("planStatus") or "pending"
-        # Include a short recovery note (truncated to avoid huge JSON).
-        short = (message or "").strip().replace("\n", " ")
-        if len(short) > 280:
-            short = short[:277] + "..."
-        plan["recoveryNote"] = f"Fatal session error at {now}: {short}"
-
-        write_json_atomic(plan_file, plan, indent=2, ensure_ascii=False)
-    except Exception:
-        return
-
 
 async def run_autonomous_agent(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None = None,
     max_iterations: int | None = None,
     verbose: bool = False,
     source_spec_dir: Path | None = None,
@@ -148,7 +88,8 @@ async def run_autonomous_agent(
     Args:
         project_dir: Root directory for the project
         spec_dir: Directory containing the spec (auto-claude/specs/001-name/)
-        model: Claude model to use
+        model: Model to use
+        provider: Provider identifier (claude, zai, or OpenAI-compatible)
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Whether to show detailed output
         source_spec_dir: Original spec directory in main project (for syncing from worktree)
@@ -197,25 +138,6 @@ async def run_autonomous_agent(
     # Track which phase we're in for logging
     current_log_phase = LogPhase.CODING
     is_planning_phase = False
-    planning_retry_context: str | None = None
-    planning_validation_failures = 0
-    max_planning_validation_retries = 3
-
-    def _validate_and_fix_implementation_plan() -> tuple[bool, list[str]]:
-        from spec.validate_pkg import SpecValidator, auto_fix_plan
-
-        spec_validator = SpecValidator(spec_dir)
-        result = spec_validator.validate_implementation_plan()
-        if result.valid:
-            return True, []
-
-        fixed = auto_fix_plan(spec_dir)
-        if fixed:
-            result = spec_validator.validate_implementation_plan()
-            if result.valid:
-                return True, []
-
-        return False, result.errors
 
     if first_run:
         print_status(
@@ -303,8 +225,8 @@ async def run_autonomous_agent(
             print("To continue, run the script again without --max-iterations")
             break
 
-        # Get the next subtask to work on (planner sessions shouldn't bind to a subtask)
-        next_subtask = None if first_run else get_next_subtask(spec_dir)
+        # Get the next subtask to work on
+        next_subtask = get_next_subtask(spec_dir)
         subtask_id = next_subtask.get("id") if next_subtask else None
         phase_name = next_subtask.get("phase_name") if next_subtask else None
 
@@ -339,7 +261,10 @@ async def run_autonomous_agent(
         # Get the phase-specific model and thinking level (respects task_metadata.json configuration)
         # first_run means we're in planning phase, otherwise coding phase
         current_phase = "planning" if first_run else "coding"
-        phase_model = get_phase_model(spec_dir, current_phase, model)
+        from phase_config import get_phase_provider
+
+        phase_provider = get_phase_provider(spec_dir, current_phase, provider)
+        phase_model = get_phase_model(spec_dir, current_phase, model, provider)
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
         # Create client (fresh context) with phase-specific model and thinking
@@ -348,6 +273,7 @@ async def run_autonomous_agent(
             project_dir,
             spec_dir,
             phase_model,
+            provider=phase_provider,
             agent_type="planner" if first_run else "coder",
             max_thinking_tokens=phase_thinking_budget,
         )
@@ -355,8 +281,6 @@ async def run_autonomous_agent(
         # Generate appropriate prompt
         if first_run:
             prompt = generate_planner_prompt(spec_dir, project_dir)
-            if planning_retry_context:
-                prompt += "\n\n" + planning_retry_context
 
             # Retrieve Graphiti memory context for planning phase
             # This gives the planner knowledge of previous patterns, gotchas, and insights
@@ -393,10 +317,6 @@ async def run_autonomous_agent(
                     task_logger.start_phase(
                         LogPhase.CODING, "Starting implementation..."
                     )
-                # In worktree mode, the UI prefers planning logs from the main spec dir.
-                # Ensure the planning->coding transition is immediately reflected there.
-                if sync_spec_to_source(spec_dir, source_spec_dir):
-                    print_status("Phase transition synced to main project", "success")
 
             if not next_subtask:
                 print("No pending subtasks found - build may be complete!")
@@ -455,46 +375,8 @@ async def run_autonomous_agent(
                 client, prompt, spec_dir, verbose, phase=current_log_phase
             )
 
-        plan_validated = False
-        if is_planning_phase and status != "error":
-            valid, errors = _validate_and_fix_implementation_plan()
-            if valid:
-                plan_validated = True
-                planning_retry_context = None
-            else:
-                planning_validation_failures += 1
-                if planning_validation_failures >= max_planning_validation_retries:
-                    print_status(
-                        "implementation_plan.json validation failed too many times",
-                        "error",
-                    )
-                    for err in errors:
-                        print(f"  - {err}")
-                    status_manager.update(state=BuildState.ERROR)
-                    return
-
-                print_status(
-                    "implementation_plan.json invalid - retrying planner", "warning"
-                )
-                for err in errors:
-                    print(f"  - {err}")
-
-                planning_retry_context = (
-                    "## IMPLEMENTATION PLAN VALIDATION ERRORS\n\n"
-                    "The previous `implementation_plan.json` is INVALID.\n"
-                    "You MUST rewrite it to match the required schema:\n"
-                    "- Top-level: `feature`, `workflow_type`, `phases`\n"
-                    "- Each phase: `id` (or `phase`) and `name`, and `subtasks`\n"
-                    "- Each subtask: `id`, `description`, `status` (use `pending` for not started)\n\n"
-                    "Validation errors:\n" + "\n".join(f"- {e}" for e in errors)
-                )
-                # Stay in planning mode for the next iteration
-                first_run = True
-                status = "continue"
-
         # === POST-SESSION PROCESSING (100% reliable) ===
-        # Only run post-session processing for coding sessions.
-        if subtask_id and current_log_phase == LogPhase.CODING:
+        if subtask_id and not first_run:
             linear_is_enabled = (
                 linear_task is not None and linear_task.task_id is not None
             )
@@ -532,7 +414,7 @@ async def run_autonomous_agent(
                         attempt_count=attempt_count,
                     )
                     print_status("Linear notified of stuck subtask", "info")
-        elif plan_validated and source_spec_dir:
+        elif is_planning_phase and source_spec_dir:
             # After planning phase, sync the newly created implementation plan back to source
             if sync_spec_to_source(spec_dir, source_spec_dir):
                 print_status("Implementation plan synced to main project", "success")
@@ -566,9 +448,7 @@ async def run_autonomous_agent(
             print_progress_summary(spec_dir)
 
             # Update state back to building
-            status_manager.update(
-                state=BuildState.PLANNING if is_planning_phase else BuildState.BUILDING
-            )
+            status_manager.update(state=BuildState.BUILDING)
 
             # Show next subtask info
             next_subtask = get_next_subtask(spec_dir)
@@ -589,18 +469,6 @@ async def run_autonomous_agent(
         elif status == "error":
             emit_phase(ExecutionPhase.FAILED, "Session encountered an error")
             print_status("Session encountered an error", "error")
-            if _is_non_retryable_session_error(response):
-                print()
-                print_status("Non-retryable provider/config error detected", "error")
-                print(
-                    muted(
-                        "Auto-retry stopped. Fix the provider configuration or switch models, then rerun the task."
-                    )
-                )
-                _persist_fatal_error_to_plan(spec_dir, response)
-                status_manager.update(state=BuildState.ERROR)
-                raise RuntimeError(response)
-
             print(muted("Will retry with a fresh session..."))
             status_manager.update(state=BuildState.ERROR)
             await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)

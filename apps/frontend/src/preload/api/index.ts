@@ -14,6 +14,7 @@ import { ClaudeCodeAPI, createClaudeCodeAPI } from './modules/claude-code-api';
 import { McpAPI, createMcpAPI } from './modules/mcp-api';
 import { ProfileAPI, createProfileAPI } from './profile-api';
 import { StatusReportAPI, createStatusReportAPI } from './modules/status-report-api';
+import { AnomalyFixAPI, createAnomalyFixAPI } from './modules/anomaly-fix-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -30,7 +31,8 @@ export interface ElectronAPI extends
   ClaudeCodeAPI,
   McpAPI,
   ProfileAPI,
-  StatusReportAPI {
+  StatusReportAPI,
+  AnomalyFixAPI {
   github: GitHubAPI;
 }
 
@@ -47,9 +49,10 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createGitLabAPI(),
   ...createDebugAPI(),
   ...createClaudeCodeAPI(),
-  ...  createMcpAPI(),
+  ...createMcpAPI(),
   ...createProfileAPI(),
   ...createStatusReportAPI(),
+  ...createAnomalyFixAPI(),
   github: createGitHubAPI()
 });
 
@@ -70,7 +73,8 @@ export {
   createDebugAPI,
   createClaudeCodeAPI,
   createMcpAPI,
-  createStatusReportAPI
+  createStatusReportAPI,
+  createAnomalyFixAPI
 };
 
 export type {
@@ -89,5 +93,6 @@ export type {
   DebugAPI,
   ClaudeCodeAPI,
   McpAPI,
-  StatusReportAPI
+  StatusReportAPI,
+  AnomalyFixAPI
 };

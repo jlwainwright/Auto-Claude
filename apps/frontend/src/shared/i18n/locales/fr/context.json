@@ -1,0 +1,154 @@
+{
+  "memories": {
+    "title": "Navigateur de mémoire",
+    "searchTitle": "Rechercher des mémoires",
+    "searchPlaceholder": "Rechercher des modèles, idées, pièges...",
+    "resultsCount": "{{count}} résultat",
+    "resultsCount_plural": "{{count}} résultats",
+    "of": "{{filtered}} sur {{total}} mémoires",
+    "filters": {
+      "title": "Filtres",
+      "all": "Tout",
+      "prReviews": "Revues PR",
+      "sessions": "Sessions",
+      "codebase": "Base de code",
+      "patterns": "Modèles",
+      "gotchas": "Pièges"
+    },
+    "dateFilter": {
+      "title": "Période",
+      "allTime": "Toute période",
+      "today": "Aujourd'hui",
+      "thisWeek": "Cette semaine",
+      "thisMonth": "Ce mois-ci",
+      "customRange": "Personnalisé",
+      "from": "Du",
+      "to": "Au",
+      "apply": "Appliquer",
+      "clear": "Effacer"
+    },
+    "empty": {
+      "noMemories": "Aucune mémoire enregistrée pour le moment. Les mémoires sont créées lors des sessions de l'agent IA et des revues PR.",
+      "noMatch": "Aucune mémoire ne correspond aux filtres sélectionnés.",
+      "showAll": "Afficher toutes les mémoires"
+    },
+    "stats": {
+      "total": "Total",
+      "prReviews": "Revues PR",
+      "sessions": "Sessions",
+      "codebase": "Base de code",
+      "patterns": "Modèles",
+      "gotchas": "Pièges",
+      "card": {
+        "title": "Statistiques de mémoire",
+        "totalMemories": "Total des mémoires",
+        "storageSize": "Taille de stockage",
+        "oldestMemory": "Mémoire la plus ancienne",
+        "newestMemory": "Mémoire la plus récente",
+        "distribution": "Distribution par type",
+        "loading": "Chargement des statistiques...",
+        "error": "Échec du chargement des statistiques",
+        "retry": "Réessayer",
+        "noData": "Aucune statistique disponible"
+      },
+      "type": {
+        "sessionInsight": "Aperçus de session",
+        "codebaseDiscovery": "Découvertes de base de code",
+        "codebaseMap": "Cartes de base de code",
+        "pattern": "Modèles",
+        "gotcha": "Pièges",
+        "taskOutcome": "Résultats de tâche",
+        "qaResult": "Résultats QA",
+        "historicalContext": "Contexte historique",
+        "prReview": "Revues PR",
+        "prFinding": "Découvertes PR",
+        "prPattern": "Modèles PR",
+        "prGotcha": "Pièges PR"
+      }
+    },
+    "status": {
+      "connected": "Connecté",
+      "notAvailable": "Non disponible",
+      "database": "Base de données",
+      "path": "Chemin",
+      "notConfigured": "La mémoire Graphiti n'est pas configurée",
+      "enableInfo": "Pour activer la mémoire graph, définissez {{code}} dans les paramètres du projet."
+    },
+    "bulkActions": {
+      "selected": "{{count}} sélectionné(s)",
+      "selectAll": "Tout sélectionner",
+      "clearSelection": "Effacer la sélection",
+      "deleteSelected": "Supprimer la sélection",
+      "exportSelected": "Exporter en JSON",
+      "deleteConfirm": "Êtes-vous sûr de vouloir supprimer {{count}} mémoires ? Cette action ne peut pas être annulée.",
+      "deleteSuccess": "{{count}} mémoires supprimées avec succès.",
+      "deleteError": "Échec de la suppression de certaines mémoires.",
+      "exportSuccess": "{{count}} mémoires exportées avec succès.",
+      "exportError": "Échec de l'export des mémoires."
+    },
+    "graph": {
+      "loading": "Chargement du graphe de mémoire...",
+      "errorTitle": "Échec du chargement du graphe",
+      "retry": "Réessayer",
+      "emptyTitle": "Aucune mémoire à visualiser",
+      "emptyDescription": "Les mémoires sont créées lors des sessions de l'agent IA. Lancez un build pour voir votre graphe de connaissances grandir.",
+      "zoomIn": "Zoom avant",
+      "zoomOut": "Zoom arrière",
+      "resetView": "Réinitialiser la vue",
+      "statsTitle": "Statistiques de mémoire",
+      "stats": "{{episodes}} épisodes • {{entities}} entités • {{connections}} connexions",
+      "storage": "Stockage : {{size}}",
+      "toast": {
+        "deleteSuccess": {
+          "title": "Mémoire supprimée",
+          "description": "La mémoire a été supprimée avec succès."
+        },
+        "deleteError": {
+          "title": "Échec de la suppression",
+          "description": "Échec de la suppression de la mémoire. Veuillez réessayer."
+        }
+      },
+      "performanceMode": "Mode performance",
+      "performanceModeAggressive": "Mode performance (agressif)"
+    },
+    "detail": {
+      "closePanel": "Fermer le panneau",
+      "created": "Créé {{date}}",
+      "session": "Session #{{number}}",
+      "content": "Contenu",
+      "connections": "Connexions ({{count}})",
+      "noConnections": "Aucune connexion vers d'autres mémoires",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "deleting": "Suppression...",
+      "deleteTitle": "Supprimer la mémoire ?",
+      "deleteConfirm": "Êtes-vous sûr de vouloir supprimer « {{label}} » ? Cette action ne peut pas être annulée.",
+      "cancel": "Annuler"
+    },
+    "edit": {
+      "title": "Modifier la mémoire",
+      "description": "Modifiez le contenu de cette mémoire. Les modifications seront enregistrées dans le graphe de connaissances.",
+      "type": "Type",
+      "label": "Label",
+      "contentLabel": "Contenu",
+      "contentPlaceholder": "Entrez le contenu de la mémoire...",
+      "contentHint": "Modifiez le contenu de cette mémoire. Ce champ ne peut pas être vide.",
+      "validation": {
+        "empty": "Le contenu de la mémoire ne peut pas être vide"
+      },
+      "saving": "Enregistrement...",
+      "saveChanges": "Enregistrer les modifications",
+      "cancel": "Annuler",
+      "toast": {
+        "success": {
+          "title": "Mémoire mise à jour",
+          "description": "La mémoire a été mise à jour avec succès."
+        },
+        "error": {
+          "title": "Échec de la mise à jour",
+          "description": "Échec de la mise à jour de la mémoire. Veuillez réessayer."
+        }
+      }
+    }
+  }
+}

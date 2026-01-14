@@ -14,7 +14,16 @@ import { app } from 'electron';
 import { findPythonCommand, parsePythonCommand } from './python-detector';
 import { getConfiguredPythonPath, pythonEnvManager } from './python-env-manager';
 import { getMemoriesDir } from './config-paths';
-import type { MemoryEpisode } from '../shared/types';
+import type {
+  MemoryEpisode,
+  MemoryGraphData,
+  MemoryGraphNode,
+  MemoryGraphEdge,
+  MemoryStorageStats,
+  MemoryGraphQueryResult,
+  MemoryStatsQueryResult,
+  MemoryType,
+} from '../shared/types';
 
 interface MemoryServiceConfig {
   dbPath: string;
@@ -670,6 +679,185 @@ export class MemoryService {
   }
 
   /**
+   * Get graph data for visualization (nodes and edges)
+   *
+   * Fetches all episodes, entities, and their relationships for rendering
+   * a force-directed knowledge graph.
+   *
+   * @returns Graph data with nodes, edges, and optional statistics
+   */
+  async getGraphData(): Promise<MemoryGraphData> {
+    // Fetch edges from the graph
+    const edgesResult = await executeQuery('get-edges', [
+      this.config.dbPath,
+      this.config.database,
+    ]);
+
+    if (!edgesResult.success || !edgesResult.data) {
+      console.error('Failed to get graph edges:', edgesResult.error);
+      return { nodes: [], edges: [], nodeCount: 0, edgeCount: 0 };
+    }
+
+    const edgesData = edgesResult.data as MemoryGraphQueryResult['data'];
+    if (!edgesData) {
+      return { nodes: [], edges: [], nodeCount: 0, edgeCount: 0 };
+    }
+
+    // Collect all unique node IDs from edges
+    const nodeIds = new Set<string>();
+    edgesData.edges.forEach((edge) => {
+      nodeIds.add(edge.source);
+      nodeIds.add(edge.target);
+    });
+
+    // Fetch all memories to build node data
+    const [episodes, entities] = await Promise.all([
+      this.getEpisodicMemories(1000), // Get all episodes
+      this.getEntityMemories(1000),   // Get all entities
+    ]);
+
+    // Create a map of node ID to node data
+    const nodeMap = new Map<string, MemoryGraphNode>();
+
+    // Add episodes to node map
+    episodes.forEach((episode) => {
+      if (nodeIds.has(episode.id)) {
+        nodeMap.set(episode.id, {
+          id: episode.id,
+          label: this.extractLabel(episode.content),
+          type: episode.type,
+          timestamp: episode.timestamp,
+          content: episode.content,
+          session_number: episode.session_number,
+          size: this.getNodeSize(episode.type),
+        });
+      }
+    });
+
+    // Add entities to node map
+    entities.forEach((entity) => {
+      if (nodeIds.has(entity.id)) {
+        nodeMap.set(entity.id, {
+          id: entity.id,
+          label: this.extractLabel(entity.content),
+          type: entity.type,
+          timestamp: entity.timestamp,
+          content: entity.content,
+          size: this.getNodeSize(entity.type),
+        });
+      }
+    });
+
+    // Convert edges to the expected format
+    const graphEdges: MemoryGraphEdge[] = edgesData.edges.map((edge) => ({
+      source: edge.source,
+      target: edge.target,
+      relationship_type: edge.relationship_type,
+      source_name: edge.source_name,
+      target_name: edge.target_name,
+      label: this.formatEdgeLabel(edge.relationship_type),
+    }));
+
+    // Convert node map to array
+    const nodes = Array.from(nodeMap.values());
+
+    return {
+      nodes,
+      edges: graphEdges,
+      nodeCount: nodes.length,
+      edgeCount: graphEdges.length,
+    };
+  }
+
+  /**
+   * Get storage statistics for the memory database
+   *
+   * Returns counts of episodes, entities, edges, and storage size.
+   *
+   * @returns Storage statistics
+   */
+  async getStorageStats(): Promise<MemoryStorageStats | null> {
+    const result = await executeQuery('get-stats', [
+      this.config.dbPath,
+      this.config.database,
+    ]);
+
+    if (!result.success || !result.data) {
+      console.error('Failed to get storage stats:', result.error);
+      return null;
+    }
+
+    const stats = result.data as MemoryStatsQueryResult['data'];
+    if (!stats) {
+      return null;
+    }
+
+    return {
+      episode_count: stats.episode_count,
+      entity_count: stats.entity_count,
+      edge_count: stats.edge_count,
+      storage_bytes: stats.storage_bytes,
+      storage_human: stats.storage_human,
+    };
+  }
+
+  /**
+   * Delete a memory episode by ID
+   *
+   * Removes an episode and its associated relationships from the graph.
+   *
+   * @param id Episode UUID to delete
+   * @returns Success status and error message if failed
+   */
+  async deleteMemory(id: string): Promise<{ success: boolean; error?: string }> {
+    const result = await executeQuery('delete-episode', [
+      this.config.dbPath,
+      this.config.database,
+      '--id',
+      id,
+    ]);
+
+    if (!result.success) {
+      const errorMsg = result.error || 'Failed to delete memory';
+      console.error('Failed to delete memory:', errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Update a memory episode's content
+   *
+   * Modifies the content of an existing episode in the graph.
+   *
+   * @param id Episode UUID to update
+   * @param content New content for the episode
+   * @returns Success status and error message if failed
+   */
+  async updateMemory(
+    id: string,
+    content: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const result = await executeQuery('update-episode', [
+      this.config.dbPath,
+      this.config.database,
+      '--id',
+      id,
+      '--content',
+      content,
+    ]);
+
+    if (!result.success) {
+      const errorMsg = result.error || 'Failed to update memory';
+      console.error('Failed to update memory:', errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    return { success: true };
+  }
+
+  /**
    * Close the database connection (no-op for subprocess model)
    */
   async close(): Promise<void> {
@@ -694,6 +882,68 @@ export class MemoryService {
       default:
         return 'session_insight';
     }
+  }
+
+  /**
+   * Extract a short label from memory content for graph nodes
+   *
+   * Takes the first line or first 50 characters, whichever is shorter.
+   *
+   * @param content Full memory content
+   * @returns Short label for display
+   */
+  private extractLabel(content: string): string {
+    if (!content) {
+      return 'Untitled';
+    }
+
+    // Take the first line
+    const firstLine = content.split('\n')[0].trim();
+
+    // Truncate to 50 characters if needed
+    if (firstLine.length > 50) {
+      return firstLine.substring(0, 47) + '...';
+    }
+
+    return firstLine || 'Untitled';
+  }
+
+  /**
+   * Get the visual size for a node based on its type
+   *
+   * Important memory types get larger nodes in the visualization.
+   *
+   * @param type Memory type
+   * @returns Node size multiplier (default: 1)
+   */
+  private getNodeSize(type: MemoryType): number {
+    switch (type) {
+      case 'pattern':
+        return 2; // Patterns are important - make them larger
+      case 'gotcha':
+        return 1.5; // Gotchas are also important
+      case 'codebase_discovery':
+        return 1.2; // Discoveries are somewhat important
+      default:
+        return 1; // Default size
+    }
+  }
+
+  /**
+   * Format a relationship type for display as an edge label
+   *
+   * Converts snake_case relationship types to readable labels.
+   *
+   * @param relationshipType Raw relationship type (e.g., ABSTRACT_HAS_EPISODE)
+   * @returns Formatted label (e.g., "has episode")
+   */
+  private formatEdgeLabel(relationshipType: string): string {
+    // Convert ABSTRACT_HAS_EPISODE to "has episode"
+    return relationshipType
+      .toLowerCase()
+      .replace(/^abstract_/, '') // Remove ABSTRACT_ prefix
+      .replace(/^episode_/, '')   // Remove EPISODE_ prefix
+      .replace(/_/g, ' ');        // Replace underscores with spaces
   }
 }
 

@@ -57,9 +57,10 @@ import {
   DEFAULT_FEATURE_MODELS,
   DEFAULT_FEATURE_THINKING,
   AVAILABLE_MODELS,
+  AVAILABLE_ZAI_MODELS,
   THINKING_LEVELS
 } from '../../shared/constants/models';
-import type { ModelTypeShort, ThinkingLevel } from '../../shared/types/settings';
+import type { ModelId, ThinkingLevel } from '../../shared/types/settings';
 
 // Agent configuration data - mirrors AGENT_CONFIGS from backend
 // Model and thinking are now dynamically read from user settings
@@ -79,15 +80,16 @@ interface AgentConfig {
     feature: 'insights' | 'ideation' | 'roadmap' | 'githubIssues' | 'githubPrs' | 'utility';
   } | {
     type: 'fixed';  // For agents not yet configurable
-    model: ModelTypeShort;
+    model: ModelId;
     thinking: ThinkingLevel;
   };
 }
 
 // Helper to get model label from short name
-function getModelLabel(modelShort: ModelTypeShort): string {
-  const model = AVAILABLE_MODELS.find(m => m.value === modelShort);
-  return model?.label.replace('Claude ', '') || modelShort;
+function getModelLabel(modelId: ModelId): string {
+  const model = [...AVAILABLE_MODELS, ...AVAILABLE_ZAI_MODELS].find(m => m.value === modelId);
+  if (!model) return modelId;
+  return model.label.replace('Claude ', '');
 }
 
 // Helper to get thinking label from level
@@ -992,7 +994,7 @@ export function AgentTools() {
 
   // Resolve model and thinking for an agent based on its settings source
   const resolveAgentSettings = useMemo(() => {
-    return (config: AgentConfig): { model: ModelTypeShort; thinking: ThinkingLevel } => {
+    return (config: AgentConfig): { model: ModelId; thinking: ThinkingLevel } => {
       const source = config.settingsSource;
 
       if (source.type === 'phase') {

@@ -161,15 +161,21 @@ export interface ColorThemeDefinition {
 export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'ultrathink';
 
 // Model type shorthand
-export type ModelTypeShort = 'haiku' | 'sonnet' | 'opus' | 'glm-4.7' | 'glm-4.5-air';
+export type ModelTypeShort = 'haiku' | 'sonnet' | 'opus';
+
+// Provider identifiers
+export type ProviderId = 'claude' | 'zai';
+
+// Model ID (supports shorthand or provider-specific IDs)
+export type ModelId = string;
 
 // Phase-based model configuration for Auto profile
 // Each phase can use a different model optimized for that task type
 export interface PhaseModelConfig {
-  spec: ModelTypeShort;       // Spec creation (discovery, requirements, context)
-  planning: ModelTypeShort;   // Implementation planning
-  coding: ModelTypeShort;     // Actual coding implementation
-  qa: ModelTypeShort;         // QA review and fixing
+  spec: ModelId;       // Spec creation (discovery, requirements, context)
+  planning: ModelId;   // Implementation planning
+  coding: ModelId;     // Actual coding implementation
+  qa: ModelId;         // QA review and fixing
 }
 
 // Thinking level configuration per phase
@@ -178,6 +184,14 @@ export interface PhaseThinkingConfig {
   planning: ThinkingLevel;
   coding: ThinkingLevel;
   qa: ThinkingLevel;
+}
+
+// Provider configuration per phase
+export interface PhaseProviderConfig {
+  spec: ProviderId;
+  planning: ProviderId;
+  coding: ProviderId;
+  qa: ProviderId;
 }
 
 // Feature-specific model configuration (for non-pipeline features)
@@ -200,6 +214,19 @@ export interface FeatureThinkingConfig {
   utility: ThinkingLevel;
 }
 
+// Feature provider type
+export type FeatureProvider = 'claude' | 'zai';
+
+// Feature-specific provider configuration
+export interface FeatureProviderConfig {
+  insights: FeatureProvider;
+  ideation: FeatureProvider;
+  roadmap: FeatureProvider;
+  githubIssues: FeatureProvider;
+  githubPrs: FeatureProvider;
+  utility: FeatureProvider;
+}
+
 // Agent profile for preset model/thinking configurations
 // All profiles have per-phase configuration (phaseModels/phaseThinking)
 export interface AgentProfile {
@@ -212,6 +239,7 @@ export interface AgentProfile {
   // Per-phase configuration - all profiles now have this
   phaseModels?: PhaseModelConfig;
   phaseThinking?: PhaseThinkingConfig;
+  phaseProviders?: PhaseProviderConfig;
   /** @deprecated Use phaseModels and phaseThinking for per-phase configuration. Will be removed in v3.0. */
   isAutoProfile?: boolean;
 }
@@ -236,6 +264,8 @@ export interface AppSettings {
   globalGoogleApiKey?: string;
   globalGroqApiKey?: string;
   globalOpenRouterApiKey?: string;
+  globalZaiApiKey?: string;
+  globalZaiBaseUrl?: string;
   // Graphiti LLM provider settings (legacy)
   graphitiLlmProvider?: 'openai' | 'anthropic' | 'google' | 'groq' | 'ollama';
   ollamaBaseUrl?: string;
@@ -255,14 +285,14 @@ export interface AppSettings {
   onboardingCompleted?: boolean;
   // Selected agent profile for preset model/thinking configurations
   selectedAgentProfile?: string;
-  // User-defined agent profiles (stored in settings.json)
-  customAgentProfiles?: AgentProfile[];
   // Custom phase configuration for Auto profile (overrides defaults)
   customPhaseModels?: PhaseModelConfig;
   customPhaseThinking?: PhaseThinkingConfig;
+  customPhaseProviders?: PhaseProviderConfig;
   // Feature-specific configuration (insights, ideation, roadmap)
   featureModels?: FeatureModelConfig;
   featureThinking?: FeatureThinkingConfig;
+  featureProviders?: FeatureProviderConfig;
   // Changelog preferences
   changelogFormat?: ChangelogFormat;
   changelogAudience?: ChangelogAudience;

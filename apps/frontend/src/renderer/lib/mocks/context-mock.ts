@@ -36,5 +36,43 @@ export const contextMock = {
   getRecentMemories: async () => ({
     success: true,
     data: []
+  }),
+
+  getGraphData: async () => ({
+    success: true,
+    data: {
+      nodes: [],
+      edges: [],
+      stats: {
+        episode_count: 0,
+        entity_count: 0,
+        edge_count: 0,
+        storage_bytes: 0,
+        storage_human: '0 B'
+      },
+      nodeCount: 0,
+      edgeCount: 0
+    }
+  }),
+
+  getMemoryStats: async () => ({
+    success: true,
+    data: {
+      episode_count: 0,
+      entity_count: 0,
+      edge_count: 0,
+      storage_bytes: 0,
+      storage_human: '0 B'
+    }
+  }),
+
+  deleteMemory: async () => ({
+    success: false,
+    error: 'Not available in browser mock'
+  }),
+
+  updateMemory: async () => ({
+    success: false,
+    error: 'Not available in browser mock'
   })
 };

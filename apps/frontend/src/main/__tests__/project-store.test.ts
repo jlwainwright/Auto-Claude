@@ -324,6 +324,58 @@ describe('ProjectStore', () => {
       expect(tasks[0].status).toBe('in_progress'); // Some completed, some pending
     });
 
+    it('should support legacy plan schema (subtask_id/title)', async () => {
+      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '001-legacy-plan');
+      mkdirSync(specsDir, { recursive: true });
+
+      const legacyPlan = {
+        feature: 'Legacy Feature',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+        status: 'backlog',
+        planStatus: 'pending',
+        phases: [
+          {
+            phase_id: 'phase-1',
+            title: 'Phase 1',
+            description: 'Phase 1 description',
+            subtasks: [
+              {
+                subtask_id: '1.1',
+                title: 'Legacy Subtask Title',
+                description: 'Legacy subtask description',
+                status: 'pending'
+              },
+              {
+                subtask_id: '1.2',
+                title: 'Legacy title only',
+                status: 'pending'
+              }
+            ]
+          }
+        ]
+      };
+
+      writeFileSync(
+        path.join(specsDir, 'implementation_plan.json'),
+        JSON.stringify(legacyPlan)
+      );
+
+      const { ProjectStore } = await import('../project-store');
+      const store = new ProjectStore();
+
+      const project = store.addProject(TEST_PROJECT_PATH);
+      const tasks = store.getTasks(project.id);
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].title).toBe('Legacy Feature');
+      expect(tasks[0].subtasks).toHaveLength(2);
+      expect(tasks[0].subtasks[0].id).toBe('1.1');
+      expect(tasks[0].subtasks[0].description).toBe('Legacy subtask description');
+      expect(tasks[0].subtasks[1].id).toBe('1.2');
+      expect(tasks[0].subtasks[1].description).toBe('Legacy title only');
+    });
+
     it('should determine status as backlog when no subtasks completed', async () => {
       const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '002-pending');
       mkdirSync(specsDir, { recursive: true });

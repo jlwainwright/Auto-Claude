@@ -36,6 +36,7 @@ async def run_followup_planner(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None = None,
     verbose: bool = False,
 ) -> bool:
     """
@@ -56,7 +57,8 @@ async def run_followup_planner(
     Args:
         project_dir: Root directory for the project
         spec_dir: Directory containing the completed spec
-        model: Claude model to use
+        model: Model to use
+        provider: Provider identifier (claude, zai, or OpenAI-compatible)
         verbose: Whether to show detailed output
 
     Returns:
@@ -93,12 +95,16 @@ async def run_followup_planner(
 
     # Create client with phase-specific model and thinking budget
     # Respects task_metadata.json configuration when no CLI override
-    planning_model = get_phase_model(spec_dir, "planning", model)
+    from phase_config import get_phase_provider
+
+    planning_provider = get_phase_provider(spec_dir, "planning", provider)
+    planning_model = get_phase_model(spec_dir, "planning", model, provider)
     planning_thinking_budget = get_phase_thinking_budget(spec_dir, "planning")
     client = create_client(
         project_dir,
         spec_dir,
         planning_model,
+        provider=planning_provider,
         max_thinking_tokens=planning_thinking_budget,
     )
 
@@ -141,7 +147,7 @@ async def run_followup_planner(
             if pending_subtasks:
                 # Reset the plan status to in_progress (in case planner didn't)
                 plan.reset_for_followup()
-                await plan.async_save(plan_file)
+                plan.save(plan_file)
 
                 print()
                 content = [

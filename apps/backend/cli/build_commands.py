@@ -53,6 +53,7 @@ def handle_build_command(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None,
     max_iterations: int | None,
     verbose: bool,
     force_isolated: bool,
@@ -86,30 +87,39 @@ def handle_build_command(
         debug_section,
         debug_success,
     )
-    from phase_config import get_phase_model
-    from prompts_pkg.prompts import get_base_branch_from_metadata
+    from phase_config import get_phase_model, get_phase_provider
     from qa_loop import run_qa_validation_loop, should_run_qa
 
     from .utils import print_banner, validate_environment
 
     # Get the resolved model for the planning phase (first phase of build)
     # This respects task_metadata.json phase configuration from the UI
-    planning_model = get_phase_model(spec_dir, "planning", model)
-    coding_model = get_phase_model(spec_dir, "coding", model)
-    qa_model = get_phase_model(spec_dir, "qa", model)
+    planning_provider = get_phase_provider(spec_dir, "planning", provider)
+    coding_provider = get_phase_provider(spec_dir, "coding", provider)
+    qa_provider = get_phase_provider(spec_dir, "qa", provider)
+
+    planning_model = get_phase_model(spec_dir, "planning", model, provider)
+    coding_model = get_phase_model(spec_dir, "coding", model, provider)
+    qa_model = get_phase_model(spec_dir, "qa", model, provider)
 
     print_banner()
     print(f"\nProject directory: {project_dir}")
     print(f"Spec: {spec_dir.name}")
-    # Show phase-specific models if they differ
-    if planning_model != coding_model or coding_model != qa_model:
+    # Show phase-specific providers/models if they differ
+    if (
+        planning_model != coding_model
+        or coding_model != qa_model
+        or planning_provider != coding_provider
+        or coding_provider != qa_provider
+    ):
         print(
-            f"Models: Planning={planning_model.split('-')[1] if '-' in planning_model else planning_model}, "
-            f"Coding={coding_model.split('-')[1] if '-' in coding_model else coding_model}, "
-            f"QA={qa_model.split('-')[1] if '-' in qa_model else qa_model}"
+            "Models: "
+            f"Planning={planning_provider}:{planning_model}, "
+            f"Coding={coding_provider}:{coding_model}, "
+            f"QA={qa_provider}:{qa_model}"
         )
     else:
-        print(f"Model: {planning_model}")
+        print(f"Model: {planning_provider}:{planning_model}")
 
     if max_iterations:
         print(f"Max iterations: {max_iterations}")
@@ -119,8 +129,10 @@ def handle_build_command(
     print()
 
     # Validate environment
-    if not validate_environment(spec_dir):
-        sys.exit(1)
+    providers = {planning_provider, coding_provider, qa_provider}
+    for phase_provider in sorted(providers):
+        if not validate_environment(spec_dir, phase_provider):
+            sys.exit(1)
 
     # Check human review approval
     review_state = ReviewState.load(spec_dir)
@@ -195,14 +207,6 @@ def handle_build_command(
         auto_continue=auto_continue,
     )
 
-    # If base_branch not provided via CLI, try to read from task_metadata.json
-    # This ensures the backend uses the branch configured in the frontend
-    if base_branch is None:
-        metadata_branch = get_base_branch_from_metadata(spec_dir)
-        if metadata_branch:
-            base_branch = metadata_branch
-            debug("run.py", f"Using base branch from task metadata: {base_branch}")
-
     if workspace_mode == WorkspaceMode.ISOLATED:
         # Keep reference to original spec directory for syncing progress back
         source_spec_dir = spec_dir
@@ -237,6 +241,7 @@ def handle_build_command(
                 project_dir=working_dir,  # Use worktree if isolated
                 spec_dir=spec_dir,
                 model=model,
+                provider=provider,
                 max_iterations=max_iterations,
                 verbose=verbose,
                 source_spec_dir=source_spec_dir,  # For syncing progress back to main project
@@ -260,6 +265,7 @@ def handle_build_command(
                         project_dir=working_dir,
                         spec_dir=spec_dir,
                         model=model,
+                        provider=provider,
                         verbose=verbose,
                     )
                 )
@@ -312,6 +318,7 @@ def handle_build_command(
             worktree_manager=worktree_manager,
             working_dir=working_dir,
             model=model,
+            provider=provider,
             max_iterations=max_iterations,
             verbose=verbose,
         )
@@ -330,6 +337,7 @@ def _handle_build_interrupt(
     worktree_manager,
     working_dir: Path,
     model: str,
+    provider: str | None,
     max_iterations: int | None,
     verbose: bool,
 ) -> None:
@@ -342,6 +350,7 @@ def _handle_build_interrupt(
         worktree_manager: Worktree manager instance (if using isolated mode)
         working_dir: Current working directory
         model: Model being used
+        provider: Provider being used
         max_iterations: Maximum iterations
         verbose: Verbose mode flag
     """
@@ -448,6 +457,7 @@ def _handle_build_interrupt(
                     project_dir=working_dir,
                     spec_dir=spec_dir,
                     model=model,
+                    provider=provider,
                     max_iterations=max_iterations,
                     verbose=verbose,
                 )

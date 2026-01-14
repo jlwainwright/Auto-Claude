@@ -1,0 +1,154 @@
+{
+  "memories": {
+    "title": "Memory Browser",
+    "searchTitle": "Search Memories",
+    "searchPlaceholder": "Search for patterns, insights, gotchas...",
+    "resultsCount": "{{count}} result",
+    "resultsCount_plural": "{{count}} results",
+    "of": "{{filtered}} of {{total}} memories",
+    "filters": {
+      "title": "Filters",
+      "all": "All",
+      "prReviews": "PR Reviews",
+      "sessions": "Sessions",
+      "codebase": "Codebase",
+      "patterns": "Patterns",
+      "gotchas": "Gotchas"
+    },
+    "dateFilter": {
+      "title": "Time Range",
+      "allTime": "All Time",
+      "today": "Today",
+      "thisWeek": "This Week",
+      "thisMonth": "This Month",
+      "customRange": "Custom Range",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply",
+      "clear": "Clear"
+    },
+    "empty": {
+      "noMemories": "No memories recorded yet. Memories are created during AI agent sessions and PR reviews.",
+      "noMatch": "No memories match the selected filters.",
+      "showAll": "Show all memories"
+    },
+    "stats": {
+      "total": "Total",
+      "prReviews": "PR Reviews",
+      "sessions": "Sessions",
+      "codebase": "Codebase",
+      "patterns": "Patterns",
+      "gotchas": "Gotchas",
+      "card": {
+        "title": "Memory Statistics",
+        "totalMemories": "Total Memories",
+        "storageSize": "Storage Size",
+        "oldestMemory": "Oldest Memory",
+        "newestMemory": "Newest Memory",
+        "distribution": "Distribution by Type",
+        "loading": "Loading statistics...",
+        "error": "Failed to load statistics",
+        "retry": "Retry",
+        "noData": "No statistics available"
+      },
+      "type": {
+        "sessionInsight": "Session Insights",
+        "codebaseDiscovery": "Codebase Discoveries",
+        "codebaseMap": "Codebase Maps",
+        "pattern": "Patterns",
+        "gotcha": "Gotchas",
+        "taskOutcome": "Task Outcomes",
+        "qaResult": "QA Results",
+        "historicalContext": "Historical Context",
+        "prReview": "PR Reviews",
+        "prFinding": "PR Findings",
+        "prPattern": "PR Patterns",
+        "prGotcha": "PR Gotchas"
+      }
+    },
+    "status": {
+      "connected": "Connected",
+      "notAvailable": "Not Available",
+      "database": "Database",
+      "path": "Path",
+      "notConfigured": "Graphiti memory is not configured",
+      "enableInfo": "To enable graph memory, set {{code}} in project settings."
+    },
+    "bulkActions": {
+      "selected": "{{count}} selected",
+      "selectAll": "Select All",
+      "clearSelection": "Clear Selection",
+      "deleteSelected": "Delete Selected",
+      "exportSelected": "Export JSON",
+      "deleteConfirm": "Are you sure you want to delete {{count}} memories? This action cannot be undone.",
+      "deleteSuccess": "Successfully deleted {{count}} memories.",
+      "deleteError": "Failed to delete some memories.",
+      "exportSuccess": "Successfully exported {{count}} memories.",
+      "exportError": "Failed to export memories."
+    },
+    "graph": {
+      "loading": "Loading memory graph...",
+      "errorTitle": "Failed to load graph",
+      "retry": "Retry",
+      "emptyTitle": "No memories to visualize",
+      "emptyDescription": "Memories are created during AI agent sessions. Start a build to see your knowledge graph grow.",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "resetView": "Reset view",
+      "statsTitle": "Memory Stats",
+      "stats": "{{episodes}} episodes • {{entities}} entities • {{connections}} connections",
+      "storage": "Storage: {{size}}",
+      "toast": {
+        "deleteSuccess": {
+          "title": "Memory deleted",
+          "description": "The memory has been successfully deleted."
+        },
+        "deleteError": {
+          "title": "Delete failed",
+          "description": "Failed to delete memory. Please try again."
+        }
+      },
+      "performanceMode": "Performance mode",
+      "performanceModeAggressive": "Performance mode (aggressive)"
+    },
+    "detail": {
+      "closePanel": "Close panel",
+      "created": "Created {{date}}",
+      "session": "Session #{{number}}",
+      "content": "Content",
+      "connections": "Connections ({{count}})",
+      "noConnections": "No connections to other memories",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleting": "Deleting...",
+      "deleteTitle": "Delete Memory?",
+      "deleteConfirm": "Are you sure you want to delete \"{{label}}\"? This action cannot be undone.",
+      "cancel": "Cancel"
+    },
+    "edit": {
+      "title": "Edit Memory",
+      "description": "Edit the content of this memory. Changes will be saved to the knowledge graph.",
+      "type": "Type",
+      "label": "Label",
+      "contentLabel": "Content",
+      "contentPlaceholder": "Enter memory content...",
+      "contentHint": "Edit the content of this memory. This field cannot be empty.",
+      "validation": {
+        "empty": "Memory content cannot be empty"
+      },
+      "saving": "Saving...",
+      "saveChanges": "Save Changes",
+      "cancel": "Cancel",
+      "toast": {
+        "success": {
+          "title": "Memory updated",
+          "description": "The memory has been successfully updated."
+        },
+        "error": {
+          "title": "Update failed",
+          "description": "Failed to update memory. Please try again."
+        }
+      }
+    }
+  }
+}

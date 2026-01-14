@@ -42,6 +42,7 @@ class IdeationOrchestrator:
         include_kanban_context: bool = True,
         max_ideas_per_type: int = 5,
         model: str = "sonnet",  # Changed from "opus" (fix #433)
+        provider: str | None = None,
         thinking_level: str = "medium",
         refresh: bool = False,
         append: bool = False,
@@ -69,6 +70,7 @@ class IdeationOrchestrator:
             include_kanban_context=include_kanban_context,
             max_ideas_per_type=max_ideas_per_type,
             model=model,
+            provider=provider,
             thinking_level=thinking_level,
             refresh=refresh,
             append=append,

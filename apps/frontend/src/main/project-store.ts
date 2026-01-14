@@ -2,7 +2,7 @@ import { app } from 'electron';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, Dirent } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, TaskErrorInfo, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
+import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask, SubtaskStatus } from '../shared/types';
 import { DEFAULT_PROJECT_SETTINGS, AUTO_BUILD_PATHS, getSpecsDir } from '../shared/constants';
 import { getAutoBuildPath, isInitialized } from './project-initializer';
 import { getTaskWorktreeDir } from './worktree-paths';
@@ -384,7 +384,6 @@ export class ProjectStore {
 
         // Try to read implementation plan
         let plan: ImplementationPlan | null = null;
-        let parseError: TaskErrorInfo | null = null;
         if (existsSync(planPath)) {
           console.warn(`[ProjectStore] Loading implementation_plan.json for spec: ${dir.name} from ${location}`);
           try {
@@ -398,15 +397,7 @@ export class ProjectStore {
               subtaskCount: plan?.phases?.flatMap(p => p.subtasks || []).length || 0
             });
           } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            parseError = {
-              key: 'errors:task.parseImplementationPlan',
-              meta: {
-                specId: dir.name,
-                error: errorMessage.slice(0, 500)
-              }
-            };
-            console.error(`[ProjectStore] Failed to parse implementation_plan.json for ${dir.name}:`, errorMessage);
+            console.error(`[ProjectStore] Failed to parse implementation_plan.json for ${dir.name}:`, err);
           }
         } else {
           console.warn(`[ProjectStore] No implementation_plan.json found for spec: ${dir.name} at ${planPath}`);
@@ -464,32 +455,38 @@ export class ProjectStore {
         }
 
         // Determine task status and review reason from plan
-        // If there's a parse error, override to error status
-        let finalStatus: TaskStatus;
-        let finalDescription = description;
-        let finalReviewReason: ReviewReason | undefined = undefined;
-        let finalErrorInfo: TaskErrorInfo | undefined = undefined;
-
-        if (parseError) {
-          finalStatus = 'error';
-          finalErrorInfo = parseError;
-          console.error(`[ProjectStore] Creating error task for ${dir.name}:`, parseError);
-        } else {
-          const { status, reviewReason } = this.determineTaskStatusAndReason(plan, specPath, metadata);
-          finalStatus = status;
-          finalReviewReason = reviewReason;
-        }
+        const { status, reviewReason } = this.determineTaskStatusAndReason(plan, specPath, metadata);
 
         // Extract subtasks from plan (handle both 'subtasks' and 'chunks' naming)
-        const subtasks = plan?.phases?.flatMap((phase) => {
+        // Backwards compatibility: some older plans used `subtask_id` + `title` instead of `id` + `description`.
+        const subtasks = plan?.phases?.flatMap((phase, phaseIndex) => {
           const items = phase.subtasks || (phase as { chunks?: PlanSubtask[] }).chunks || [];
-          return items.map((subtask) => ({
-            id: subtask.id,
-            title: subtask.description,
-            description: subtask.description,
-            status: subtask.status,
-            files: []
-          }));
+          return items.map((subtask, subtaskIndex) => {
+            const legacy = subtask as unknown as { subtask_id?: unknown; title?: unknown; status?: unknown };
+
+            const rawId = (subtask as unknown as { id?: unknown }).id ?? legacy.subtask_id;
+            const id = typeof rawId === 'string' && rawId.trim()
+              ? rawId
+              : `phase-${phaseIndex + 1}-subtask-${subtaskIndex + 1}`;
+
+            const rawDescription = (subtask as unknown as { description?: unknown }).description ?? legacy.title;
+            const description = typeof rawDescription === 'string' ? rawDescription : '';
+
+            const rawStatus = legacy.status ?? (subtask as unknown as { status?: unknown }).status;
+            const status: SubtaskStatus = rawStatus === 'pending' || rawStatus === 'in_progress' || rawStatus === 'completed' || rawStatus === 'failed'
+              ? rawStatus
+              : rawStatus === 'done'
+                ? 'completed'
+                : 'pending';
+
+            return {
+              id,
+              title: description,
+              description,
+              status,
+              files: []
+            };
+          });
         }) || [];
 
         // Extract staged status from plan (set when changes are merged with --no-commit)
@@ -521,13 +518,12 @@ export class ProjectStore {
           specId: dir.name,
           projectId,
           title,
-          description: finalDescription,
-          status: finalStatus,
+          description,
+          status,
+          reviewReason,
           subtasks,
           logs: [],
           metadata,
-          ...(finalReviewReason !== undefined && { reviewReason: finalReviewReason }),
-          ...(finalErrorInfo !== undefined && { errorInfo: finalErrorInfo }),
           stagedInMainProject,
           stagedAt,
           location, // Add location metadata (main vs worktree)
@@ -607,8 +603,7 @@ export class ProjectStore {
         'human_review': 'human_review',
         'ai_review': 'ai_review',
         'pr_created': 'pr_created', // PR has been created for this task
-        'backlog': 'backlog',
-        'error': 'error' // Preserves error status from JSON parse failures
+        'backlog': 'backlog'
       };
       const storedStatus = statusMap[plan.status];
 
@@ -622,40 +617,24 @@ export class ProjectStore {
         return { status: 'pr_created' };
       }
 
-      // If task has an error status, always respect that (from JSON parse failures)
-      if (storedStatus === 'error') {
-        return { status: 'error' };
-      }
-
       // For other stored statuses, validate against calculated status
       if (storedStatus) {
         // Planning/coding status from the backend should be respected even if subtasks aren't in progress yet
         // This happens when a task is in planning phase (creating spec) but no subtasks have been started
         const isActiveProcessStatus = (plan.status as string) === 'planning' || (plan.status as string) === 'coding' || (plan.status as string) === 'in_progress';
 
-        // Check if this is a plan/spec approval stage before coding starts.
-        // Only valid when the user explicitly enabled "requireReviewBeforeCoding".
-        // NOTE: planStatus === "review" is also used for ai_review/human_review after completion,
-        // so we must gate this to avoid pinning active tasks in Human Review.
-        const requiresReviewBeforeCoding = Boolean(metadata?.requireReviewBeforeCoding);
-        const isPlanReviewStage =
-          requiresReviewBeforeCoding &&
-          (plan as unknown as { planStatus?: string })?.planStatus === 'review' &&
-          calculatedStatus === 'backlog';
+        // Check if this is a plan review (spec approval stage before coding starts)
+        // planStatus: "review" indicates spec creation is complete and awaiting user approval
+        const isPlanReviewStage = (plan as unknown as { planStatus?: string })?.planStatus === 'review';
 
         // Determine if there is remaining work to do
         // True if: no subtasks exist yet (planning in progress) OR some subtasks are incomplete
         // This prevents 'in_progress' from overriding 'human_review' when all work is done
         const hasRemainingWork = allSubtasks.length === 0 || allSubtasks.some((s) => s.status !== 'completed');
 
-        // Additional subtask-derived signals for validating stored human_review
-        const hasFailedSubtasks = allSubtasks.some((s) => s.status === 'failed');
-        const allCompleted = allSubtasks.length > 0 && allSubtasks.every((s) => s.status === 'completed');
-
         const isStoredStatusValid =
           (storedStatus === calculatedStatus) || // Matches calculated
-          (storedStatus === 'human_review' && hasFailedSubtasks) || // Failed subtasks require human attention
-          (storedStatus === 'human_review' && allCompleted) || // Completed work waiting for review/merge
+          (storedStatus === 'human_review' && (calculatedStatus === 'ai_review' || calculatedStatus === 'in_progress')) || // Human review is more advanced than ai_review or in_progress (fixes status loop bug)
           (storedStatus === 'human_review' && isPlanReviewStage) || // Plan review stage (awaiting spec approval)
           (isActiveProcessStatus && storedStatus === 'in_progress' && hasRemainingWork); // Planning/coding phases should show as in_progress ONLY when there's remaining work
 
@@ -663,6 +642,8 @@ export class ProjectStore {
           // Preserve reviewReason for human_review status
           if (storedStatus === 'human_review' && !reviewReason) {
             // Infer reason from subtask states or plan review stage
+            const hasFailedSubtasks = allSubtasks.some((s) => s.status === 'failed');
+            const allCompleted = allSubtasks.length > 0 && allSubtasks.every((s) => s.status === 'completed');
             if (hasFailedSubtasks) {
               reviewReason = 'errors';
             } else if (allCompleted) {

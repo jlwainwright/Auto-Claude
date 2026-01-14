@@ -3,8 +3,7 @@ import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/con
 import type { IPCResult, TaskStartOptions, TaskStatus } from '../../../shared/types';
 import path from 'path';
 import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
-import { spawnSync, execFileSync } from 'child_process';
-import { getToolPath } from '../../cli-tool-manager';
+import { spawnSync } from 'child_process';
 import { AgentManager } from '../../agent';
 import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
@@ -129,7 +128,7 @@ export function registerTaskExecutionHandlers(
         return;
       }
 
-      // Check authentication - Only required if task uses Claude provider
+      // Check authentication - Claude requires valid auth to run tasks
       if (taskUsesClaude(task.metadata)) {
         const profileManager = getClaudeProfileManager();
         if (!profileManager.hasValidAuth()) {
@@ -197,7 +196,8 @@ export function registerTaskExecutionHandlers(
           {
             parallel: false,  // Sequential for planning phase
             workers: 1,
-            baseBranch
+            baseBranch,
+            useWorktree: task.metadata?.useWorktree
           },
           task.metadata
         );
@@ -213,7 +213,8 @@ export function registerTaskExecutionHandlers(
           {
             parallel: false,
             workers: 1,
-            baseBranch
+            baseBranch,
+            useWorktree: task.metadata?.useWorktree
           },
           task.metadata
         );
@@ -442,17 +443,14 @@ export function registerTaskExecutionHandlers(
 
   /**
    * Update task status manually
-   * Options:
-   * - forceCleanup: When setting to 'done' with a worktree present, delete the worktree first
    */
   ipcMain.handle(
     IPC_CHANNELS.TASK_UPDATE_STATUS,
     async (
       _,
       taskId: string,
-      status: TaskStatus,
-      options?: { forceCleanup?: boolean }
-    ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> => {
+      status: TaskStatus
+    ): Promise<IPCResult> => {
       // Find task and project first (needed for worktree check)
       const { task, project } = findTaskAndProject(taskId);
 
@@ -462,80 +460,21 @@ export function registerTaskExecutionHandlers(
 
       // Validate status transition - 'done' can only be set through merge handler
       // UNLESS there's no worktree (limbo state - already merged/discarded or failed)
-      // OR forceCleanup is requested (user confirmed they want to delete the worktree)
       if (status === 'done') {
         // Check if worktree exists (task.specId matches worktree folder name)
         const worktreePath = findTaskWorktree(project.path, task.specId);
         const hasWorktree = worktreePath !== null;
 
         if (hasWorktree) {
-          if (options?.forceCleanup) {
-            // User confirmed cleanup - delete worktree and branch
-            console.warn(`[TASK_UPDATE_STATUS] Cleaning up worktree for task ${taskId} (user confirmed)`);
-            try {
-              // Get the branch name before removing the worktree
-              let branch = '';
-              let usingFallbackBranch = false;
-              try {
-                branch = execFileSync(getToolPath('git'), ['rev-parse', '--abbrev-ref', 'HEAD'], {
-                  cwd: worktreePath,
-                  encoding: 'utf-8',
-                  timeout: 30000
-                }).trim();
-              } catch (branchError) {
-                // If we can't get branch name, use the default pattern
-                branch = `auto-claude/${task.specId}`;
-                usingFallbackBranch = true;
-                console.warn(`[TASK_UPDATE_STATUS] Could not get branch name, using fallback pattern: ${branch}`, branchError);
-              }
-
-              // Remove the worktree
-              execFileSync(getToolPath('git'), ['worktree', 'remove', '--force', worktreePath], {
-                cwd: project.path,
-                encoding: 'utf-8',
-                timeout: 30000
-              });
-              console.warn(`[TASK_UPDATE_STATUS] Worktree removed: ${worktreePath}`);
-
-              // Delete the branch (ignore errors if branch doesn't exist)
-              try {
-                execFileSync(getToolPath('git'), ['branch', '-D', branch], {
-                  cwd: project.path,
-                  encoding: 'utf-8',
-                  timeout: 30000
-                });
-                console.warn(`[TASK_UPDATE_STATUS] Branch deleted: ${branch}`);
-              } catch (branchDeleteError) {
-                // Branch may not exist or may be the current branch
-                if (usingFallbackBranch) {
-                  // More concerning - fallback pattern didn't match actual branch
-                  console.warn(`[TASK_UPDATE_STATUS] Could not delete branch ${branch} using fallback pattern. Actual branch may still exist and need manual cleanup.`, branchDeleteError);
-                } else {
-                  console.warn(`[TASK_UPDATE_STATUS] Could not delete branch ${branch} (may not exist or be checked out elsewhere)`);
-                }
-              }
-
-              console.warn(`[TASK_UPDATE_STATUS] Worktree cleanup completed successfully`);
-            } catch (cleanupError) {
-              console.error(`[TASK_UPDATE_STATUS] Failed to cleanup worktree:`, cleanupError);
-              return {
-                success: false,
-                error: `Failed to cleanup worktree: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`
-              };
-            }
-          } else {
-            // Worktree exists but no forceCleanup - return special response for UI to show confirmation
-            console.warn(`[TASK_UPDATE_STATUS] Worktree exists for task ${taskId}. Requesting user confirmation.`);
-            return {
-              success: false,
-              worktreeExists: true,
-              worktreePath: worktreePath,
-              error: "A worktree still exists for this task. Would you like to delete it and mark the task as complete?"
-            };
-          }
+          // Worktree exists - must use merge workflow
+          console.warn(`[TASK_UPDATE_STATUS] Blocked attempt to set status 'done' directly for task ${taskId}. Use merge workflow instead.`);
+          return {
+            success: false,
+            error: "Cannot set status to 'done' directly. Complete the human review and merge the worktree changes instead."
+          };
         } else {
           // No worktree - allow marking as done (limbo state recovery)
-          console.warn(`[TASK_UPDATE_STATUS] Allowing status 'done' for task ${taskId} (no worktree found - limbo state)`);
+          console.log(`[TASK_UPDATE_STATUS] Allowing status 'done' for task ${taskId} (no worktree found - limbo state)`);
         }
       }
 
@@ -611,18 +550,20 @@ export function registerTaskExecutionHandlers(
             return { success: false, error: gitStatusCheck.error || 'Git repository required' };
           }
 
-          // Check authentication before auto-starting
-          const profileManager = getClaudeProfileManager();
-          if (!profileManager.hasValidAuth()) {
-            console.warn('[TASK_UPDATE_STATUS] No valid authentication for active profile');
-            if (mainWindow) {
-              mainWindow.webContents.send(
-                IPC_CHANNELS.TASK_ERROR,
-                taskId,
-                'Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account, or set an OAuth token.'
-              );
+          // Check authentication before auto-starting (Claude only)
+          if (taskUsesClaude(task.metadata)) {
+            const profileManager = getClaudeProfileManager();
+            if (!profileManager.hasValidAuth()) {
+              console.warn('[TASK_UPDATE_STATUS] No valid authentication for active profile');
+              if (mainWindow) {
+                mainWindow.webContents.send(
+                  IPC_CHANNELS.TASK_ERROR,
+                  taskId,
+                  'Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account, or set an OAuth token.'
+                );
+              }
+              return { success: false, error: 'Claude authentication required' };
             }
-            return { success: false, error: 'Claude authentication required' };
           }
 
           console.warn('[TASK_UPDATE_STATUS] Auto-starting task:', taskId);
@@ -656,7 +597,8 @@ export function registerTaskExecutionHandlers(
               {
                 parallel: false,
                 workers: 1,
-                baseBranch: baseBranchForUpdate
+                baseBranch: baseBranchForUpdate,
+                useWorktree: task.metadata?.useWorktree
               },
               task.metadata
             );
@@ -671,7 +613,8 @@ export function registerTaskExecutionHandlers(
               {
                 parallel: false,
                 workers: 1,
-                baseBranch: baseBranchForUpdate
+                baseBranch: baseBranchForUpdate,
+                useWorktree: task.metadata?.useWorktree
               },
               task.metadata
             );
@@ -942,21 +885,23 @@ export function registerTaskExecutionHandlers(
             };
           }
 
-          // Check authentication before auto-restarting
-          const profileManager = getClaudeProfileManager();
-          if (!profileManager.hasValidAuth()) {
-            console.warn('[Recovery] Auth check failed, cannot auto-restart task');
-            // Recovery succeeded but we can't restart without auth
-            return {
-              success: true,
-              data: {
-                taskId,
-                recovered: true,
-                newStatus,
-                message: 'Task recovered but cannot restart: Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account.',
-                autoRestarted: false
-              }
-            };
+          // Check authentication before auto-restarting (Claude only)
+          if (taskUsesClaude(task.metadata)) {
+            const profileManager = getClaudeProfileManager();
+            if (!profileManager.hasValidAuth()) {
+              console.warn('[Recovery] Auth check failed, cannot auto-restart task');
+              // Recovery succeeded but we can't restart without auth
+              return {
+                success: true,
+                data: {
+                  taskId,
+                  recovered: true,
+                  newStatus,
+                  message: 'Task recovered but cannot restart: Claude authentication required. Please go to Settings > Claude Profiles and authenticate your account.',
+                  autoRestarted: false
+                }
+              };
+            }
           }
 
           try {
@@ -1009,7 +954,8 @@ export function registerTaskExecutionHandlers(
                 {
                   parallel: false,
                   workers: 1,
-                  baseBranch: baseBranchForRecovery
+                  baseBranch: baseBranchForRecovery,
+                  useWorktree: task.metadata?.useWorktree
                 },
                 task.metadata
               );

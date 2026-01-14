@@ -20,6 +20,7 @@ from .analyzers import (
 from .ci_discovery import CIDiscovery
 
 # Import from analysis module root (these are other analysis tools)
+from .enhanced_analyzer import EnhancedProjectAnalyzer
 from .project_analyzer import ProjectAnalyzer
 from .risk_classifier import RiskClassifier
 from .security_scanner import SecurityScanner
@@ -31,6 +32,7 @@ from .test_discovery import TestDiscovery
 __all__ = [
     "ProjectAnalyzer",
     "ModularProjectAnalyzer",
+    "EnhancedProjectAnalyzer",
     "ServiceAnalyzer",
     "analyze_project",
     "analyze_service",

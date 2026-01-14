@@ -469,3 +469,123 @@ export interface FileNode {
   name: string;
   isDirectory: boolean;
 }
+
+// ============================================
+// Memory Graph Visualization Types
+// ============================================
+
+/**
+ * Graph node representing a memory or entity in the knowledge graph.
+ * Used for force-directed graph visualization.
+ */
+export interface MemoryGraphNode {
+  /** Unique identifier (UUID or name) */
+  id: string;
+  /** Display label for the node */
+  label: string;
+  /** Memory type (e.g., pattern, gotcha, session_insight, codebase_discovery) */
+  type: MemoryType;
+  /** Node size (for visualization - can represent importance) */
+  size?: number;
+  /** Timestamp when the memory was created */
+  timestamp: string;
+  /** Full content/description of the memory */
+  content?: string;
+  /** Session number (if applicable) */
+  session_number?: number;
+  /** Group ID for namespacing */
+  group_id?: string;
+  /** Color for visualization (optional, will be computed from type if not provided) */
+  color?: string;
+  /** X coordinate (computed by force-layout) */
+  x?: number;
+  /** Y coordinate (computed by force-layout) */
+  y?: number;
+}
+
+/**
+ * Graph edge representing a relationship between two memories/entities.
+ * Used for force-directed graph visualization.
+ */
+export interface MemoryGraphEdge {
+  /** Source node ID (UUID) */
+  source: string;
+  /** Target node ID (UUID) */
+  target: string;
+  /** Type of relationship (e.g., ABSTRACT_HAS_EPISODE, RELATED_TO, MENTIONED_IN) */
+  relationship_type: string;
+  /** Source node name (for quick access) */
+  source_name?: string;
+  /** Target node name (for quick access) */
+  target_name?: string;
+  /** Edge label (derived from relationship_type) */
+  label?: string;
+}
+
+/**
+ * Storage statistics for the memory database.
+ */
+export interface MemoryStorageStats {
+  /** Total number of episodic memories */
+  episode_count: number;
+  /** Total number of entities (patterns, gotchas, etc.) */
+  entity_count: number;
+  /** Total number of relationships (edges) */
+  edge_count: number;
+  /** Storage size in bytes */
+  storage_bytes: number;
+  /** Human-readable storage size (e.g., "1.5 MB") */
+  storage_human: string;
+}
+
+/**
+ * Complete graph data for visualization.
+ * Combines nodes and edges with optional metadata.
+ */
+export interface MemoryGraphData {
+  /** All nodes in the graph */
+  nodes: MemoryGraphNode[];
+  /** All edges/relationships in the graph */
+  edges: MemoryGraphEdge[];
+  /** Optional statistics */
+  stats?: MemoryStorageStats;
+  /** Total nodes count */
+  nodeCount?: number;
+  /** Total edges count */
+  edgeCount?: number;
+}
+
+/**
+ * Result of graph data query from backend.
+ * Matches the JSON output from query_memory.py get-edges command.
+ */
+export interface MemoryGraphQueryResult {
+  success: boolean;
+  data?: {
+    edges: Array<{
+      source: string;
+      target: string;
+      source_name: string;
+      target_name: string;
+      relationship_type: string;
+    }>;
+    count: number;
+  };
+  error?: string;
+}
+
+/**
+ * Result of storage stats query from backend.
+ * Matches the JSON output from query_memory.py get-stats command.
+ */
+export interface MemoryStatsQueryResult {
+  success: boolean;
+  data?: {
+    episode_count: number;
+    entity_count: number;
+    edge_count: number;
+    storage_bytes: number;
+    storage_human: string;
+  };
+  error?: string;
+}

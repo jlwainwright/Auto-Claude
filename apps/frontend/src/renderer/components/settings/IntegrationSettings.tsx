@@ -29,8 +29,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { SettingsSection } from './SettingsSection';
 import { loadClaudeProfiles as loadGlobalClaudeProfiles } from '../../stores/claude-profile-store';
 import { useClaudeLoginTerminal } from '../../hooks/useClaudeLoginTerminal';
-import { useToast } from '../../hooks/use-toast';
-import { debugLog, debugError } from '../../../shared/utils/debug-logger';
 import type { AppSettings, ClaudeProfile, ClaudeAutoSwitchSettings } from '../../../shared/types';
 
 interface IntegrationSettingsProps {
@@ -45,9 +43,9 @@ interface IntegrationSettingsProps {
 export function IntegrationSettings({ settings, onSettingsChange, isOpen }: IntegrationSettingsProps) {
   const { t } = useTranslation('settings');
   const { t: tCommon } = useTranslation('common');
-  const { toast } = useToast();
   // Password visibility toggle for global API keys
   const [showGlobalOpenAIKey, setShowGlobalOpenAIKey] = useState(false);
+  const [showGlobalZaiKey, setShowGlobalZaiKey] = useState(false);
 
   // Claude Accounts state
   const [claudeProfiles, setClaudeProfiles] = useState<ClaudeProfile[]>([]);
@@ -86,16 +84,13 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
       if (info.success && info.profileId) {
         // Reload profiles to show updated state
         await loadClaudeProfiles();
-        // Show simple success notification (non-blocking)
-        toast({
-          title: t('integrations.toast.authSuccess'),
-          description: info.email ? t('integrations.toast.authSuccessWithEmail', { email: info.email }) : t('integrations.toast.authSuccessGeneric'),
-        });
+        // Show simple success notification
+        alert(`✅ Profile authenticated successfully!\n\n${info.email ? `Account: ${info.email}` : 'Authentication complete.'}\n\nYou can now use this profile.`);
       }
     });
 
     return unsubscribe;
-  }, [t, toast]);
+  }, []);
 
   const loadClaudeProfiles = async () => {
     setIsLoadingProfiles(true);
@@ -108,7 +103,7 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
         await loadGlobalClaudeProfiles();
       }
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to load Claude profiles:', err);
+      console.error('Failed to load Claude profiles:', err);
     } finally {
       setIsLoadingProfiles(false);
     }
@@ -141,20 +136,12 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
           // Users can see the 'claude setup-token' output directly
         } else {
           await loadClaudeProfiles();
-          toast({
-            variant: 'destructive',
-            title: t('integrations.toast.authStartFailed'),
-            description: initResult.error || t('integrations.toast.tryAgain'),
-          });
+          alert(`Failed to start authentication: ${initResult.error || 'Please try again.'}`);
         }
       }
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to add profile:', err);
-      toast({
-        variant: 'destructive',
-        title: t('integrations.toast.addProfileFailed'),
-        description: t('integrations.toast.tryAgain'),
-      });
+      console.error('Failed to add profile:', err);
+      alert('Failed to add profile. Please try again.');
     } finally {
       setIsAddingProfile(false);
     }
@@ -168,7 +155,7 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
         await loadClaudeProfiles();
       }
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to delete profile:', err);
+      console.error('Failed to delete profile:', err);
     } finally {
       setDeletingProfileId(null);
     }
@@ -193,7 +180,7 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
         await loadClaudeProfiles();
       }
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to rename profile:', err);
+      console.error('Failed to rename profile:', err);
     } finally {
       setEditingProfileId(null);
       setEditingProfileName('');
@@ -208,35 +195,23 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
         await loadGlobalClaudeProfiles();
       }
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to set active profile:', err);
+      console.error('Failed to set active profile:', err);
     }
   };
 
   const handleAuthenticateProfile = async (profileId: string) => {
-    debugLog('[IntegrationSettings] handleAuthenticateProfile called for:', profileId);
     setAuthenticatingProfileId(profileId);
     try {
-      debugLog('[IntegrationSettings] Calling initializeClaudeProfile IPC...');
       const initResult = await window.electronAPI.initializeClaudeProfile(profileId);
-      debugLog('[IntegrationSettings] IPC returned:', initResult);
       if (!initResult.success) {
-        toast({
-          variant: 'destructive',
-          title: t('integrations.toast.authStartFailed'),
-          description: initResult.error || t('integrations.toast.tryAgain'),
-        });
+        alert(`Failed to start authentication: ${initResult.error || 'Please try again.'}`);
       }
       // Note: If successful, the terminal is now visible in the UI via the onTerminalAuthCreated event
       // Users can see the 'claude setup-token' output and complete OAuth flow directly
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to authenticate profile:', err);
-      toast({
-        variant: 'destructive',
-        title: t('integrations.toast.authStartFailed'),
-        description: t('integrations.toast.tryAgain'),
-      });
+      console.error('Failed to authenticate profile:', err);
+      alert('Failed to start authentication. Please try again.');
     } finally {
-      debugLog('[IntegrationSettings] finally block - clearing authenticatingProfileId');
       setAuthenticatingProfileId(null);
     }
   };
@@ -271,24 +246,12 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
         setManualToken('');
         setManualTokenEmail('');
         setShowManualToken(false);
-        toast({
-          title: t('integrations.toast.tokenSaved'),
-          description: t('integrations.toast.tokenSavedDescription'),
-        });
       } else {
-        toast({
-          variant: 'destructive',
-          title: t('integrations.toast.tokenSaveFailed'),
-          description: result.error || t('integrations.toast.tryAgain'),
-        });
+        alert(`Failed to save token: ${result.error || 'Please try again.'}`);
       }
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to save token:', err);
-      toast({
-        variant: 'destructive',
-        title: t('integrations.toast.tokenSaveFailed'),
-        description: t('integrations.toast.tryAgain'),
-      });
+      console.error('Failed to save token:', err);
+      alert('Failed to save token. Please try again.');
     } finally {
       setSavingTokenProfileId(null);
     }
@@ -303,7 +266,7 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
         setAutoSwitchSettings(result.data);
       }
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to load auto-switch settings:', err);
+      console.error('Failed to load auto-switch settings:', err);
     } finally {
       setIsLoadingAutoSwitch(false);
     }
@@ -317,19 +280,11 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
       if (result.success) {
         await loadAutoSwitchSettings();
       } else {
-        toast({
-          variant: 'destructive',
-          title: t('integrations.toast.settingsUpdateFailed'),
-          description: result.error || t('integrations.toast.tryAgain'),
-        });
+        alert(`Failed to update settings: ${result.error || 'Please try again.'}`);
       }
     } catch (err) {
-      debugError('[IntegrationSettings] Failed to update auto-switch settings:', err);
-      toast({
-        variant: 'destructive',
-        title: t('integrations.toast.settingsUpdateFailed'),
-        description: t('integrations.toast.tryAgain'),
-      });
+      console.error('Failed to update auto-switch settings:', err);
+      alert('Failed to update settings. Please try again.');
     } finally {
       setIsLoadingAutoSwitch(false);
     }
@@ -842,6 +797,53 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
                 >
                   {showGlobalOpenAIKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="globalZaiKey" className="text-sm font-medium text-foreground">
+                {t('integrations.zaiKey')}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t('integrations.zaiKeyDescription')}
+              </p>
+              <div className="relative max-w-lg">
+                <Input
+                  id="globalZaiKey"
+                  type={showGlobalZaiKey ? 'text' : 'password'}
+                  placeholder="zai-..."
+                  value={settings.globalZaiApiKey || ''}
+                  onChange={(e) =>
+                    onSettingsChange({ ...settings, globalZaiApiKey: e.target.value || undefined })
+                  }
+                  className="pr-10 font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowGlobalZaiKey(!showGlobalZaiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showGlobalZaiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="globalZaiBaseUrl" className="text-sm font-medium text-foreground">
+                {t('integrations.zaiBaseUrl')}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t('integrations.zaiBaseUrlDescription')}
+              </p>
+              <div className="max-w-lg">
+                <Input
+                  id="globalZaiBaseUrl"
+                  type="text"
+                  placeholder="https://api.z.ai/api/coding/paas/v4"
+                  value={settings.globalZaiBaseUrl || ''}
+                  onChange={(e) =>
+                    onSettingsChange({ ...settings, globalZaiBaseUrl: e.target.value || undefined })
+                  }
+                  className="font-mono text-sm"
+                />
               </div>
             </div>
           </div>

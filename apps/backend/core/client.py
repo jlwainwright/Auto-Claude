@@ -135,59 +135,54 @@ from agents.tools_pkg import (
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from claude_agent_sdk.types import HookMatcher
 from core.auth import get_sdk_env_vars, require_auth_token
+from core.provider_config import (
+    get_openai_compat_config,
+    get_provider_base_url,
+    get_zhipuai_api_key,
+    is_claude_provider,
+    is_zhipuai_provider,
+    normalize_provider,
+)
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
+from providers.openai_compat import OpenAICompatClient
 from security import bash_security_hook
-try:
-    # When running with apps/backend on sys.path (most runner entrypoints)
-    from providers.openai_compat import OpenAICompatClient
-except ModuleNotFoundError:
-    # When imported as a package (e.g., apps.backend.core.client)
-    from ..providers.openai_compat import OpenAICompatClient
 
 
-def _is_openai_compat_model(model: str) -> bool:
+def _map_zhipuai_model(model: str) -> str:
     """
-    Determine whether a model should be routed to an OpenAI-compatible provider.
+    Map Auto-Claude model names to Z.AI GLM model names for Claude-compatible endpoint.
 
-    Today this is used for Z.AI GLM models (glm-*).
+    Z.AI's Claude-compatible endpoint (https://open.bigmodel.cn/api/anthropic)
+    accepts GLM model names directly. This function handles any necessary mapping.
+
+    Args:
+        model: The model name requested by Auto-Claude
+
+    Returns:
+        The actual GLM model name to use
     """
-    m = (model or "").strip().lower()
-    return m.startswith("glm-")
-
-
-def _get_zai_config(agent_type: str) -> tuple[str, str]:
-    """
-    Get (api_key, base_url) for Z.AI OpenAI-compatible endpoints.
-
-    Env vars:
-      - ZAI_API_KEY (required for glm-* models)
-      - ZAI_BASE_URL (default: https://api.z.ai/api/paas/v4)
-      - ZAI_CODING_BASE_URL (default: https://api.z.ai/api/coding/paas/v4)
-    """
-    api_key = (os.environ.get("ZAI_API_KEY") or "").strip()
-    if not api_key:
-        raise ValueError(
-            "ZAI_API_KEY is required to use glm-* models. "
-            "Set it in your project .auto-claude/.env or apps/backend/.env."
-        )
-
-    # Use coding endpoint for agentic/code-heavy flows.
-    is_coding_flow = agent_type in ("coder", "planner", "qa_reviewer", "qa_fixer")
-
-    # IMPORTANT:
-    # Some providers expose separate "coding" endpoints, but they are not always
-    # feature-parity with the standard OpenAI-compatible endpoint for all models.
-    # Default to the standard endpoint unless the user explicitly configures a
-    # coding-specific base URL.
-    default_base = "https://api.z.ai/api/paas/v4"
-    base_url = (
-        (os.environ.get("ZAI_CODING_BASE_URL") if is_coding_flow else None)
-        or os.environ.get("ZAI_BASE_URL")
-        or default_base
-    ).strip()
-
-    return api_key, base_url
+    # Z.AI Claude-compatible endpoint model mappings
+    # Most models map directly, but we handle any special cases here
+    zhipuai_model_map = {
+        # GLM-4.7 series (latest)
+        "claude-opus-4-5-20251101": "glm-4.7",  # Map default Opus to GLM-4.7
+        "claude-sonnet-4-5-20250929": "glm-4.5",
+        "claude-sonnet-4-5-latest": "glm-4.5",
+        "claude-3.5-sonnet": "glm-4.5",
+        "claude-3-opus": "glm-4",
+        # Direct GLM model names (pass through)
+        "glm-4.7": "glm-4.7",
+        "glm-4-7": "glm-4.7",
+        "glm-4.5": "glm-4.5",
+        "glm-4-5": "glm-4.5",
+        "glm-4.5-air": "glm-4.5-air",
+        "glm-4.5-flash": "GLM-4.5-Flash",
+        "glm-4": "glm-4",
+        "glm-4-flash": "GLM-4-Flash",
+        "glm-4-air": "GLM-4-Air",
+    }
+    return zhipuai_model_map.get(model, model)
 
 
 def _validate_custom_mcp_server(server: dict) -> bool:
@@ -488,11 +483,12 @@ def create_client(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None = None,
     agent_type: str = "coder",
     max_thinking_tokens: int | None = None,
     output_format: dict | None = None,
     agents: dict | None = None,
-) -> ClaudeSDKClient | OpenAICompatClient:
+) -> Any:
     """
     Create a Claude Agent SDK client with multi-layered security.
 
@@ -503,7 +499,8 @@ def create_client(
     Args:
         project_dir: Root directory for the project (working directory)
         spec_dir: Directory containing the spec (for settings file)
-        model: Claude model to use
+        model: Model to use
+        provider: Provider identifier (claude, zai, or other OpenAI-compatible)
         agent_type: Agent type identifier from AGENT_CONFIGS
                    (e.g., 'coder', 'planner', 'qa_reviewer', 'spec_gatherer')
         max_thinking_tokens: Token budget for extended thinking (None = disabled)
@@ -520,7 +517,7 @@ def create_client(
                See: https://platform.claude.com/docs/en/agent-sdk/subagents
 
     Returns:
-        Configured ClaudeSDKClient
+        Configured ClaudeSDKClient or OpenAICompatClient
 
     Raises:
         ValueError: If agent_type is not found in AGENT_CONFIGS
@@ -532,12 +529,29 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
-    oauth_token = require_auth_token()
-    # Ensure SDK can access it via its expected env var
-    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+    provider_id = normalize_provider(provider)
 
-    # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
-    sdk_env = get_sdk_env_vars()
+    # Map model names for Z.AI Claude-compatible endpoint
+    # Z.AI's Claude-compatible endpoint uses GLM model names
+    if is_zhipuai_provider(provider_id):
+        model = _map_zhipuai_model(model)
+
+    if is_claude_provider(provider_id):
+        oauth_token = require_auth_token()
+        # Ensure SDK can access it via its expected env var
+        os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+        # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
+        sdk_env = get_sdk_env_vars()
+    elif is_zhipuai_provider(provider_id):
+        # Z.AI providers also need SDK env vars (NO_PROXY, DISABLE_TELEMETRY, etc.)
+        # But we'll set ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN later
+        sdk_env = get_sdk_env_vars()
+        # Remove any existing ANTHROPIC_BASE_URL from OS env that might interfere
+        old_base_url = sdk_env.pop("ANTHROPIC_BASE_URL", None)
+        old_auth_token = sdk_env.pop("ANTHROPIC_AUTH_TOKEN", None)
+        logger.info(f"Z.AI provider: removed old ANTHROPIC_BASE_URL={old_base_url}, ANTHROPIC_AUTH_TOKEN={old_auth_token}")
+    else:
+        sdk_env = {}
 
     # Debug: Log git-bash path detection on Windows
     if "CLAUDE_CODE_GIT_BASH_PATH" in sdk_env:
@@ -830,29 +844,37 @@ def create_client(
         print("   - CLAUDE.md: disabled by project settings")
     print()
 
-    # Route OpenAI-compatible models (e.g., Z.AI GLM) to compat client.
-    # This avoids sending glm-* model IDs to the Claude SDK (Anthropic) which results in 404s.
-    if _is_openai_compat_model(model):
-        api_key, base_url = _get_zai_config(agent_type)
-
-        # OpenAI-compat clients don't support MCP servers; filter to base supported tools.
-        return OpenAICompatClient(
-            api_key=api_key,
-            base_url=base_url,
-            model=model,
-            system_prompt=base_prompt,
-            allowed_tools=allowed_tools_list,
-            cwd=str(project_dir.resolve()),
-            max_turns=1000,
-        )
-
-    # Claude SDK path (default)
-    oauth_token = require_auth_token()
-    # Ensure SDK can access it via its expected env var
-    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
-
-    # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
-    sdk_env = get_sdk_env_vars()
+    if not is_claude_provider(provider_id):
+        if is_zhipuai_provider(provider_id):
+            # Z.AI provides a Claude-compatible endpoint!
+            # Use native Claude SDK with custom base URL (like Claude Code does)
+            # See: https://docs.bigmodel.cn/cn/guide/develop/claude
+            api_key = get_zhipuai_api_key(provider_id)
+            base_url = get_provider_base_url(provider_id)
+            logger.info(f"Z.AI provider detected - using base_url: {base_url}")
+            if base_url:
+                # Set in both os.environ (for SDK subprocess) and sdk_env (for explicit passthrough)
+                os.environ["ANTHROPIC_BASE_URL"] = base_url
+                sdk_env["ANTHROPIC_BASE_URL"] = base_url
+                logger.info(f"Set ANTHROPIC_BASE_URL={base_url}")
+            if api_key:
+                os.environ["ANTHROPIC_AUTH_TOKEN"] = api_key
+                sdk_env["ANTHROPIC_AUTH_TOKEN"] = api_key
+                logger.info(f"Set ANTHROPIC_AUTH_TOKEN=***{api_key[-10:]}")
+            # Continue to use native Claude SDK below (no early return)
+        else:
+            # Other providers use OpenAI-compatible API
+            provider_cfg = get_openai_compat_config(provider_id)
+            return OpenAICompatClient(
+                model=model,
+                system_prompt=base_prompt,
+                allowed_tools=allowed_tools_list,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                api_key=provider_cfg.api_key,
+                base_url=provider_cfg.base_url,
+                max_turns=1000,
+            )
 
     # Build options dict, conditionally including output_format
     options_kwargs = {
@@ -887,5 +909,16 @@ def create_client(
     # See: https://platform.claude.com/docs/en/agent-sdk/subagents
     if agents:
         options_kwargs["agents"] = agents
+
+    # Debug: Log final SDK environment before creating client
+    logger.info(f"Creating ClaudeSDKClient with provider={provider_id}, model={model}")
+    logger.info(f"  sdk_env ANTHROPIC_BASE_URL={sdk_env.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
+    logger.info(f"  os.environ ANTHROPIC_BASE_URL={os.environ.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
+    # Always print debug info for Z.AI provider
+    if is_zhipuai_provider(provider_id):
+        print(f"[DEBUG] Z.AI Client Configuration:")
+        print(f"[DEBUG]   sdk_env ANTHROPIC_BASE_URL={sdk_env.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
+        print(f"[DEBUG]   os.environ ANTHROPIC_BASE_URL={os.environ.get('ANTHROPIC_BASE_URL', 'NOT SET')}")
+        print(f"[DEBUG]   model={model}")
 
     return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))

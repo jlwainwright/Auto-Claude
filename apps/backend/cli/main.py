@@ -81,6 +81,7 @@ Environment Variables:
   CLAUDE_CODE_OAUTH_TOKEN  Your Claude Code OAuth token (required)
                            Get it by running: claude setup-token
   AUTO_BUILD_MODEL         Override default model (optional)
+  AUTO_BUILD_PROVIDER      Override default provider (optional)
         """,
     )
 
@@ -116,6 +117,12 @@ Environment Variables:
         type=str,
         default=None,
         help=f"Claude model to use (default: {DEFAULT_MODEL})",
+    )
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        help="Provider to use (claude, zai, or OpenAI-compatible)",
     )
 
     parser.add_argument(
@@ -304,6 +311,7 @@ def main() -> None:
     # Get model from CLI arg or env var (None if not explicitly set)
     # This allows get_phase_model() to fall back to task_metadata.json
     model = args.model or os.environ.get("AUTO_BUILD_MODEL")
+    provider = args.provider or os.environ.get("AUTO_BUILD_PROVIDER")
 
     # Handle --list command
     if args.list:
@@ -419,6 +427,7 @@ def main() -> None:
             project_dir=project_dir,
             spec_dir=spec_dir,
             model=model,
+            provider=provider,
             verbose=args.verbose,
         )
         return
@@ -429,6 +438,7 @@ def main() -> None:
             project_dir=project_dir,
             spec_dir=spec_dir,
             model=model,
+            provider=provider,
             verbose=args.verbose,
         )
         return
@@ -438,6 +448,7 @@ def main() -> None:
         project_dir=project_dir,
         spec_dir=spec_dir,
         model=model,
+        provider=provider,
         max_iterations=args.max_iterations,
         verbose=args.verbose,
         force_isolated=args.isolated,

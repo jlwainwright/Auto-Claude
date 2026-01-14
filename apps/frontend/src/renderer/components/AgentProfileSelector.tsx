@@ -9,7 +9,7 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brain, Scale, Zap, Sliders, Sparkles, ChevronDown, ChevronUp, Pencil, Settings2 } from 'lucide-react';
+import { Brain, Scale, Zap, Sliders, Sparkles, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import { Label } from './ui/label';
 import {
   Select,
@@ -21,14 +21,24 @@ import {
 import {
   DEFAULT_AGENT_PROFILES,
   AVAILABLE_MODELS,
+  AVAILABLE_ZAI_MODELS,
+  AVAILABLE_PROVIDERS,
   THINKING_LEVELS,
   DEFAULT_PHASE_MODELS,
-  DEFAULT_PHASE_THINKING
+  DEFAULT_PHASE_THINKING,
+  DEFAULT_PHASE_PROVIDERS,
+  DEFAULT_ZAI_PHASE_MODELS
 } from '../../shared/constants';
 import type { ModelType, ThinkingLevel } from '../../shared/types';
-import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
+import type {
+  PhaseModelConfig,
+  PhaseThinkingConfig,
+  PhaseProviderConfig,
+  ProviderId,
+  ModelId
+} from '../../shared/types/settings';
 import { cn } from '../lib/utils';
-import { useSettingsStore } from '../stores/settings-store';
+import { Input } from './ui/input';
 
 interface AgentProfileSelectorProps {
   /** Currently selected profile ID ('auto', 'complex', 'balanced', 'quick', or 'custom') */
@@ -37,20 +47,28 @@ interface AgentProfileSelectorProps {
   model: ModelType | '';
   /** Current thinking level value (fallback for non-auto profiles) */
   thinkingLevel: ThinkingLevel | '';
+  /** Current provider value (fallback for non-auto profiles) */
+  provider?: ProviderId;
   /** Phase model configuration (for auto profile) */
   phaseModels?: PhaseModelConfig;
   /** Phase thinking configuration (for auto profile) */
   phaseThinking?: PhaseThinkingConfig;
+  /** Phase provider configuration (for auto profile) */
+  phaseProviders?: PhaseProviderConfig;
   /** Called when profile selection changes */
   onProfileChange: (profileId: string, model: ModelType, thinkingLevel: ThinkingLevel) => void;
   /** Called when model changes (in custom mode) */
   onModelChange: (model: ModelType) => void;
+  /** Called when provider changes (in custom mode) */
+  onProviderChange?: (provider: ProviderId) => void;
   /** Called when thinking level changes (in custom mode) */
   onThinkingLevelChange: (level: ThinkingLevel) => void;
   /** Called when phase models change (in auto mode) */
   onPhaseModelsChange?: (phaseModels: PhaseModelConfig) => void;
   /** Called when phase thinking changes (in auto mode) */
   onPhaseThinkingChange?: (phaseThinking: PhaseThinkingConfig) => void;
+  /** Called when phase providers change (in auto mode) */
+  onPhaseProvidersChange?: (phaseProviders: PhaseProviderConfig) => void;
   /** Whether the selector is disabled */
   disabled?: boolean;
 }
@@ -59,8 +77,7 @@ const iconMap: Record<string, React.ElementType> = {
   Brain,
   Scale,
   Zap,
-  Sparkles,
-  Settings2
+  Sparkles
 };
 
 // Phase label translation keys
@@ -75,38 +92,42 @@ export function AgentProfileSelector({
   profileId,
   model,
   thinkingLevel,
+  provider,
   phaseModels,
   phaseThinking,
+  phaseProviders,
   onProfileChange,
   onModelChange,
+  onProviderChange,
   onThinkingLevelChange,
   onPhaseModelsChange,
   onPhaseThinkingChange,
+  onPhaseProvidersChange,
   disabled
 }: AgentProfileSelectorProps) {
   const { t } = useTranslation('settings');
-  const settings = useSettingsStore((state) => state.settings);
   const [showPhaseDetails, setShowPhaseDetails] = useState(false);
 
   const isCustom = profileId === 'custom';
   const isAuto = profileId === 'auto';
-
-  const allProfiles = [
-    ...DEFAULT_AGENT_PROFILES,
-    ...(settings.customAgentProfiles ?? [])
-  ];
+  const currentProvider: ProviderId = provider || 'claude';
+  const isCustomZai = currentProvider === 'zai';
 
   // Use provided phase configs or defaults
   const currentPhaseModels = phaseModels || DEFAULT_PHASE_MODELS;
   const currentPhaseThinking = phaseThinking || DEFAULT_PHASE_THINKING;
+  const currentPhaseProviders = phaseProviders || DEFAULT_PHASE_PROVIDERS;
 
   const handleProfileSelect = (selectedId: string) => {
     if (selectedId === 'custom') {
       // Keep current model/thinking level, just mark as custom
       onProfileChange('custom', model as ModelType || 'sonnet', thinkingLevel as ThinkingLevel || 'medium');
+      if (onProviderChange) {
+        onProviderChange((provider || 'claude') as ProviderId);
+      }
     } else {
       // Select preset profile - all profiles now have phase configs
-      const profile = allProfiles.find(p => p.id === selectedId);
+      const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === selectedId);
       if (profile) {
         onProfileChange(profile.id, profile.model, profile.thinkingLevel);
         // Initialize phase configs with profile defaults if callbacks provided
@@ -116,11 +137,14 @@ export function AgentProfileSelector({
         if (onPhaseThinkingChange && profile.phaseThinking) {
           onPhaseThinkingChange(profile.phaseThinking);
         }
+        if (onPhaseProvidersChange && profile.phaseProviders) {
+          onPhaseProvidersChange(profile.phaseProviders);
+        }
       }
     }
   };
 
-  const handlePhaseModelChange = (phase: keyof PhaseModelConfig, value: ModelType) => {
+  const handlePhaseModelChange = (phase: keyof PhaseModelConfig, value: ModelId) => {
     if (onPhaseModelsChange) {
       onPhaseModelsChange({
         ...currentPhaseModels,
@@ -138,6 +162,26 @@ export function AgentProfileSelector({
     }
   };
 
+  const handlePhaseProviderChange = (phase: keyof PhaseProviderConfig, value: ProviderId) => {
+    if (!onPhaseProvidersChange) return;
+    const newPhaseProviders = { ...currentPhaseProviders, [phase]: value };
+    const currentModel = currentPhaseModels[phase];
+    const isClaudeModel = AVAILABLE_MODELS.some((m) => m.value === currentModel);
+    const isZaiModel = AVAILABLE_ZAI_MODELS.some((m) => m.value === currentModel);
+    const newPhaseModels = { ...currentPhaseModels };
+
+    if (value === 'zai' && !isZaiModel) {
+      newPhaseModels[phase] = DEFAULT_ZAI_PHASE_MODELS[phase];
+    } else if (value === 'claude' && !isClaudeModel) {
+      newPhaseModels[phase] = DEFAULT_PHASE_MODELS[phase];
+    }
+
+    onPhaseProvidersChange(newPhaseProviders);
+    if (onPhaseModelsChange) {
+      onPhaseModelsChange(newPhaseModels);
+    }
+  };
+
   // Get profile display info
   const getProfileDisplay = () => {
     if (isCustom) {
@@ -147,7 +191,7 @@ export function AgentProfileSelector({
         description: t('agentProfile.customDescription')
       };
     }
-    const profile = allProfiles.find(p => p.id === profileId);
+    const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === profileId);
     if (profile) {
       return {
         icon: iconMap[profile.icon || 'Scale'] || Scale,
@@ -186,7 +230,7 @@ export function AgentProfileSelector({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {allProfiles.map((profile) => {
+            {DEFAULT_AGENT_PROFILES.map((profile) => {
               const ProfileIcon = iconMap[profile.icon || 'Scale'] || Scale;
               const modelLabel = AVAILABLE_MODELS.find(m => m.value === profile.model)?.label;
               return (
@@ -256,7 +300,9 @@ export function AgentProfileSelector({
             <div className="px-4 pb-4 -mt-1">
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {(Object.keys(PHASE_LABEL_KEYS) as Array<keyof PhaseModelConfig>).map((phase) => {
-                  const modelLabel = AVAILABLE_MODELS.find(m => m.value === currentPhaseModels[phase])?.label?.replace('Claude ', '') || currentPhaseModels[phase];
+                  const modelLabel = [...AVAILABLE_MODELS, ...AVAILABLE_ZAI_MODELS]
+                    .find(m => m.value === currentPhaseModels[phase])
+                    ?.label?.replace('Claude ', '') || currentPhaseModels[phase];
                   return (
                     <div key={phase} className="flex items-center justify-between rounded bg-background/50 px-2 py-1">
                       <span className="text-muted-foreground">{t(PHASE_LABEL_KEYS[phase].label)}:</span>
@@ -281,25 +327,59 @@ export function AgentProfileSelector({
                       {t(PHASE_LABEL_KEYS[phase].description)}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground">{t('agentProfile.model')}</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('agentProfile.provider')}</Label>
                       <Select
-                        value={currentPhaseModels[phase]}
-                        onValueChange={(value) => handlePhaseModelChange(phase, value as ModelType)}
+                        value={currentPhaseProviders[phase]}
+                        onValueChange={(value) => handlePhaseProviderChange(phase, value as ProviderId)}
                         disabled={disabled}
                       >
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {AVAILABLE_MODELS.map((m) => (
-                            <SelectItem key={m.value} value={m.value}>
-                              {m.label}
+                          {AVAILABLE_PROVIDERS.map((providerOption) => (
+                            <SelectItem key={providerOption.value} value={providerOption.value}>
+                              {providerOption.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">{t('agentProfile.model')}</Label>
+                      {currentPhaseProviders[phase] === 'zai' ? (
+                        <div className="space-y-1">
+                          <Input
+                            value={currentPhaseModels[phase]}
+                            onChange={(e) => handlePhaseModelChange(phase, e.target.value)}
+                            disabled={disabled}
+                            placeholder="glm-4.7"
+                            className="h-8 text-xs font-mono"
+                          />
+                          <span className="text-[9px] text-muted-foreground">
+                            Suggested: {AVAILABLE_ZAI_MODELS.map((m) => m.value).join(', ')}
+                          </span>
+                        </div>
+                      ) : (
+                        <Select
+                          value={currentPhaseModels[phase]}
+                          onValueChange={(value) => handlePhaseModelChange(phase, value as ModelId)}
+                          disabled={disabled}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {AVAILABLE_MODELS.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[10px] text-muted-foreground">{t('agentProfile.thinking')}</Label>
@@ -331,27 +411,66 @@ export function AgentProfileSelector({
       {/* Custom Configuration (shown only when custom is selected) */}
       {isCustom && (
         <div className="space-y-4 rounded-lg border border-border bg-muted/30 p-4">
+          {/* Provider Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="custom-provider" className="text-xs font-medium text-muted-foreground">
+              {t('agentProfile.provider')}
+            </Label>
+            <Select
+              value={currentProvider}
+              onValueChange={(value) => onProviderChange && onProviderChange(value as ProviderId)}
+              disabled={disabled}
+            >
+              <SelectTrigger id="custom-provider" className="h-9">
+                <SelectValue placeholder={t('agentProfile.selectProvider')} />
+              </SelectTrigger>
+              <SelectContent>
+                {AVAILABLE_PROVIDERS.map((providerOption) => (
+                  <SelectItem key={providerOption.value} value={providerOption.value}>
+                    {providerOption.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Model Selection */}
           <div className="space-y-2">
             <Label htmlFor="custom-model" className="text-xs font-medium text-muted-foreground">
               {t('agentProfile.model')}
             </Label>
-            <Select
-              value={model}
-              onValueChange={(value) => onModelChange(value as ModelType)}
-              disabled={disabled}
-            >
-              <SelectTrigger id="custom-model" className="h-9">
-                <SelectValue placeholder={t('agentProfile.selectModel')} />
-              </SelectTrigger>
-              <SelectContent>
-                {AVAILABLE_MODELS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isCustomZai ? (
+              <div className="space-y-1">
+                <Input
+                  id="custom-model"
+                  value={model}
+                  onChange={(e) => onModelChange(e.target.value as ModelType)}
+                  disabled={disabled}
+                  placeholder="glm-4.7"
+                  className="h-9 font-mono text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Suggested: {AVAILABLE_ZAI_MODELS.map((m) => m.value).join(', ')}
+                </p>
+              </div>
+            ) : (
+              <Select
+                value={model}
+                onValueChange={(value) => onModelChange(value as ModelType)}
+                disabled={disabled}
+              >
+                <SelectTrigger id="custom-model" className="h-9">
+                  <SelectValue placeholder={t('agentProfile.selectModel')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABLE_MODELS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Thinking Level Selection */}

@@ -16,6 +16,8 @@ import type {
   GraphitiMemoryStatus,
   ContextSearchResult,
   MemoryEpisode,
+  MemoryGraphData,
+  MemoryStorageStats,
   ProjectEnvConfig,
   InfrastructureStatus,
   GraphitiValidationResult,
@@ -104,11 +106,6 @@ import type {
   RoadmapGenerationStatus
 } from './roadmap';
 import type {
-  StatusReport,
-  AnomalyFixPlanRequest,
-  AnomalyFixPlanResponse
-} from './status-report';
-import type {
   LinearTeam,
   LinearProject,
   LinearIssue,
@@ -164,7 +161,7 @@ export interface ElectronAPI {
   startTask: (taskId: string, options?: TaskStartOptions) => void;
   stopTask: (taskId: string) => void;
   submitReview: (taskId: string, approved: boolean, feedback?: string) => Promise<IPCResult>;
-  updateTaskStatus: (taskId: string, status: TaskStatus, options?: { forceCleanup?: boolean }) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
+  updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<IPCResult>;
   recoverStuckTask: (taskId: string, options?: TaskRecoveryOptions) => Promise<IPCResult<TaskRecoveryResult>>;
   checkTaskRunning: (taskId: string) => Promise<IPCResult<boolean>>;
 
@@ -175,8 +172,7 @@ export interface ElectronAPI {
   mergeWorktree: (taskId: string, options?: { noCommit?: boolean }) => Promise<IPCResult<WorktreeMergeResult>>;
   mergeWorktreePreview: (taskId: string) => Promise<IPCResult<WorktreeMergeResult>>;
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions) => Promise<IPCResult<WorktreeCreatePRResult>>;
-  discardWorktree: (taskId: string, skipStatusChange?: boolean) => Promise<IPCResult<WorktreeDiscardResult>>;
-  clearStagedState: (taskId: string) => Promise<IPCResult<{ cleared: boolean }>>;
+  discardWorktree: (taskId: string) => Promise<IPCResult<WorktreeDiscardResult>>;
   listWorktrees: (projectId: string) => Promise<IPCResult<WorktreeListResult>>;
   worktreeOpenInIDE: (worktreePath: string, ide: SupportedIDE, customPath?: string) => Promise<IPCResult<{ opened: boolean }>>;
   worktreeOpenInTerminal: (worktreePath: string, terminal: SupportedTerminal, customPath?: string) => Promise<IPCResult<{ opened: boolean }>>;
@@ -355,6 +351,10 @@ export interface ElectronAPI {
   getMemoryStatus: (projectId: string) => Promise<IPCResult<GraphitiMemoryStatus>>;
   searchMemories: (projectId: string, query: string) => Promise<IPCResult<ContextSearchResult[]>>;
   getRecentMemories: (projectId: string, limit?: number) => Promise<IPCResult<MemoryEpisode[]>>;
+  getGraphData: (projectId: string) => Promise<IPCResult<MemoryGraphData>>;
+  getMemoryStats: (projectId: string) => Promise<IPCResult<MemoryStorageStats>>;
+  deleteMemory: (projectId: string, memoryId: string) => Promise<IPCResult<void>>;
+  updateMemory: (projectId: string, memoryId: string, content: string) => Promise<IPCResult<void>>;
 
   // Environment configuration operations
   getProjectEnv: (projectId: string) => Promise<IPCResult<ProjectEnvConfig>>;
@@ -793,16 +793,6 @@ export interface ElectronAPI {
   // MCP Server health check operations
   checkMcpHealth: (server: CustomMcpServer) => Promise<IPCResult<McpHealthCheckResult>>;
   testMcpConnection: (server: CustomMcpServer) => Promise<IPCResult<McpTestConnectionResult>>;
-
-  // Status Report operations
-  generateReport: (projectId: string) => Promise<IPCResult<StatusReport>>;
-  planFix: (request: AnomalyFixPlanRequest) => Promise<IPCResult<AnomalyFixPlanResponse>>;
-  startFix: (request: AnomalyFixPlanRequest) => Promise<IPCResult<{ success: boolean; error?: string }>>;
-  cancelFix: () => Promise<IPCResult>;
-  getFixState: () => Promise<IPCResult<{ isRunning: boolean }>>;
-  onLog: (callback: (log: string) => void) => () => void;
-  onComplete: (callback: (result: { success: boolean; error?: string }) => void) => () => void;
-  onError: (callback: (error: string) => void) => () => void;
 }
 
 declare global {

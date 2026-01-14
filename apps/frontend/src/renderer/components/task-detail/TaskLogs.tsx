@@ -16,13 +16,15 @@ import {
   Wrench,
   Info,
   Brain,
-  Cpu
+  Cpu,
+  Globe
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
 import { cn } from '../../lib/utils';
 import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata } from '../../../shared/types';
-import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
+import type { PhaseModelConfig, ThinkingLevel, ProviderId } from '../../../shared/types/settings';
+import { getProviderForPhase } from '../../../shared/utils/provider';
 
 interface TaskLogsProps {
   task: Task;
@@ -63,12 +65,10 @@ const LOG_PHASE_TO_CONFIG_PHASE: Record<TaskLogPhase, keyof PhaseModelConfig> = 
 };
 
 // Short labels for models
-const MODEL_SHORT_LABELS: Record<ModelTypeShort, string> = {
+const MODEL_SHORT_LABELS: Record<string, string> = {
   opus: 'Opus',
   sonnet: 'Sonnet',
-  haiku: 'Haiku',
-  'glm-4.7': 'GLM-4.7',
-  'glm-4.5-air': 'GLM-4.5-Air'
+  haiku: 'Haiku'
 };
 
 // Short labels for thinking levels
@@ -80,25 +80,34 @@ const THINKING_SHORT_LABELS: Record<ThinkingLevel, string> = {
   ultrathink: 'Ultra'
 };
 
+const PROVIDER_LABELS: Record<ProviderId, string> = {
+  claude: 'Claude',
+  zai: 'Z.AI'
+};
+
 // Helper to get model and thinking info for a log phase
 function getPhaseConfig(
   metadata: TaskMetadata | undefined,
   logPhase: TaskLogPhase
-): { model: string; thinking: string } | null {
+): { model: string; thinking: string; provider: string } | null {
   if (!metadata) return null;
 
   const configPhase = LOG_PHASE_TO_CONFIG_PHASE[logPhase];
+  const provider = getProviderForPhase(
+    configPhase,
+    metadata.provider as ProviderId | undefined,
+    metadata.phaseProviders
+  );
+  const providerLabel = PROVIDER_LABELS[provider] || provider;
 
-  const hasPhaseConfig = Boolean(metadata.phaseModels && metadata.phaseThinking);
-  const usePhaseConfig = hasPhaseConfig && (metadata.profileId ? metadata.profileId !== 'custom' : metadata.isAutoProfile);
-
-  // Per-phase config
-  if (usePhaseConfig && metadata.phaseModels && metadata.phaseThinking) {
+  // Auto profile with per-phase config
+  if (metadata.isAutoProfile && metadata.phaseModels && metadata.phaseThinking) {
     const model = metadata.phaseModels[configPhase];
     const thinking = metadata.phaseThinking[configPhase];
     return {
       model: MODEL_SHORT_LABELS[model] || model,
-      thinking: THINKING_SHORT_LABELS[thinking] || thinking
+      thinking: THINKING_SHORT_LABELS[thinking] || thinking,
+      provider: providerLabel
     };
   }
 
@@ -106,7 +115,8 @@ function getPhaseConfig(
   if (metadata.model && metadata.thinkingLevel) {
     return {
       model: MODEL_SHORT_LABELS[metadata.model] || metadata.model,
-      thinking: THINKING_SHORT_LABELS[metadata.thinkingLevel] || metadata.thinkingLevel
+      thinking: THINKING_SHORT_LABELS[metadata.thinkingLevel] || metadata.thinkingLevel,
+      provider: providerLabel
     };
   }
 
@@ -176,7 +186,7 @@ interface PhaseLogSectionProps {
   isExpanded: boolean;
   onToggle: () => void;
   isTaskStuck?: boolean;
-  phaseConfig?: { model: string; thinking: string } | null;
+  phaseConfig?: { model: string; thinking: string; provider: string } | null;
 }
 
 function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig }: PhaseLogSectionProps) {
@@ -258,6 +268,11 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
             {/* Model and thinking level indicator */}
             {phaseConfig && (
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-0.5" title={`Provider: ${phaseConfig.provider}`}>
+                  <Globe className="h-3 w-3" />
+                  <span>{phaseConfig.provider}</span>
+                </div>
+                <span className="text-muted-foreground/50">|</span>
                 <div className="flex items-center gap-0.5" title={`Model: ${phaseConfig.model}`}>
                   <Cpu className="h-3 w-3" />
                   <span>{phaseConfig.model}</span>

@@ -30,6 +30,9 @@ from ui import (
     print_status,
 )
 
+# Import input screener for security validation
+from security.input_screener import InputScreener, ScreeningResult, ScreeningVerdict
+
 from .. import complexity, phases, requirements
 from ..compaction import (
     format_phase_summaries,
@@ -58,6 +61,7 @@ class SpecOrchestrator:
         spec_dir: Path
         | None = None,  # Use existing spec directory (for UI integration)
         model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
+        provider: str | None = None,
         thinking_level: str = "medium",  # Thinking level for extended thinking
         complexity_override: str | None = None,  # Force a specific complexity
         use_ai_assessment: bool = True,  # Use AI for complexity assessment (vs heuristics)
@@ -77,6 +81,7 @@ class SpecOrchestrator:
         self.project_dir = Path(project_dir)
         self.task_description = task_description
         self.model = model
+        self.provider = provider
         self.thinking_level = thinking_level
         self.complexity_override = complexity_override
         self.use_ai_assessment = use_ai_assessment
@@ -122,7 +127,7 @@ class SpecOrchestrator:
         if self._agent_runner is None:
             task_logger = get_task_logger(self.spec_dir)
             self._agent_runner = AgentRunner(
-                self.project_dir, self.spec_dir, self.model, task_logger
+                self.project_dir, self.spec_dir, self.model, self.provider, task_logger
             )
         return self._agent_runner
 
@@ -178,6 +183,7 @@ class SpecOrchestrator:
                 phase_name,
                 phase_output,
                 model="sonnet",
+                provider=self.provider,
                 target_words=500,
             )
 
@@ -218,6 +224,103 @@ class SpecOrchestrator:
                 print_status("Using cached project index", "info")
             # If no index exists and no refresh needed, that's fine - capabilities will be empty
 
+    def _screen_task_description(self, task_logger) -> bool:
+        """Screen task description for potential malicious input.
+
+        This is a critical security check that runs before any processing begins.
+        It detects prompt injection attempts, malicious instructions, and other threats.
+
+        Args:
+            task_logger: The task logger instance
+
+        Returns:
+            True if input is safe and processing should continue, False otherwise
+        """
+        # Skip screening if no task description
+        if not self.task_description:
+            return True
+
+        print_status("Screening input for security...", "progress")
+
+        try:
+            # Initialize screener with project directory for allowlist support
+            screener = InputScreener(project_dir=str(self.project_dir))
+
+            # Screen the input
+            result = screener.screen_input(self.task_description)
+
+            # Log the screening result
+            task_logger.log(
+                f"Input screening: {result.verdict.value.upper()} "
+                f"(confidence: {result.confidence:.2f}, time: {result.screening_time_ms:.1f}ms)",
+                LogEntryType.INFO if result.is_safe else LogEntryType.ERROR,
+            )
+
+            # If not safe, log detected patterns and abort
+            if not result.is_safe:
+                print()
+                print_status("Input rejected by security screening", "error")
+
+                # Build detailed error message
+                print(f"  {muted('Reason:')} {result.reason}")
+                print()
+
+                if result.detected_patterns:
+                    print(f"  {muted('Detected patterns:')}")
+                    for pattern in result.detected_patterns[:5]:  # Show first 5 patterns
+                        severity_icon = {
+                            "critical": icon(Icons.ERROR),
+                            "high": icon(Icons.ERROR),
+                            "medium": icon(Icons.WARNING),
+                            "low": icon(Icons.WARNING),
+                        }.get(pattern.severity, icon(Icons.WARNING))
+
+                        print(
+                            f"    {severity_icon} {pattern.name} "
+                            f"[{pattern.severity}]"
+                        )
+
+                    if len(result.detected_patterns) > 5:
+                        print(
+                            f"    {muted(f"... and {len(result.detected_patterns) - 5} more")}"
+                        )
+
+                print()
+                print(
+                    f"  {muted('If you believe this is a false positive, please:')}"
+                )
+                print(f"    1. Rephrase your task description")
+                print(
+                    f"    2. Or add an allowlist pattern to {self.project_dir / '.auto-claude-screening-allowlist.txt'}"
+                )
+                print()
+
+                # Log rejection for security monitoring
+                task_logger.log(
+                    f"Input rejected: {result.reason} "
+                    f"(patterns: {len(result.detected_patterns)})",
+                    LogEntryType.ERROR,
+                )
+
+                return False
+
+            # Input is safe
+            print_status(
+                f"Input screening passed ({result.screening_time_ms:.1f}ms)", "success"
+            )
+            return True
+
+        except ValueError as e:
+            # Input validation error (e.g., too long)
+            print_status(f"Input validation failed: {e}", "error")
+            task_logger.log(f"Input validation error: {e}", LogEntryType.ERROR)
+            return False
+        except Exception as e:
+            # Unexpected error - log but don't fail (fail-open for reliability)
+            print_status(f"Screening error: {e}", "warning")
+            task_logger.log(f"Screening error (continuing): {e}", LogEntryType.INFO)
+            return True
+
     async def run(self, interactive: bool = True, auto_approve: bool = False) -> bool:
         """Run the spec creation process with dynamic phase selection.
 
@@ -244,6 +347,15 @@ class SpecOrchestrator:
                 style="heavy",
             )
         )
+
+        # === SECURITY: Screen input before any processing ===
+        # This is a critical security check to prevent prompt injection attacks
+        if not self._screen_task_description(task_logger):
+            # Input was rejected - abort spec creation
+            task_logger.end_phase(
+                LogPhase.PLANNING, success=False, message="Input rejected by security screening"
+            )
+            return False
 
         # Smart cache: refresh project index if dependency files have changed
         await self._ensure_fresh_project_index()

@@ -26,6 +26,7 @@ class IdeationConfigManager:
         include_kanban_context: bool = True,
         max_ideas_per_type: int = 5,
         model: str = "sonnet",  # Changed from "opus" (fix #433)
+        provider: str | None = None,
         thinking_level: str = "medium",
         refresh: bool = False,
         append: bool = False,
@@ -62,8 +63,9 @@ class IdeationConfigManager:
             self.project_dir,
             self.output_dir,
             self.model,
-            self.thinking_level,
-            self.max_ideas_per_type,
+            provider=provider,
+            thinking_level=self.thinking_level,
+            max_ideas_per_type=self.max_ideas_per_type,
         )
         self.analyzer = ProjectAnalyzer(
             self.project_dir,

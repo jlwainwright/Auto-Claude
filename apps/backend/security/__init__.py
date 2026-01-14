@@ -3,12 +3,14 @@ Security Module for Auto-Build Framework
 =========================================
 
 Provides security validation for bash commands using dynamic allowlists
-based on project analysis.
+based on project analysis, plus input harmlessness screening for prompt
+injection detection.
 
-The security system has three layers:
+The security system has multiple layers:
 1. Base commands - Always allowed (core shell utilities)
 2. Stack commands - Detected from project structure (frameworks, languages)
 3. Custom commands - User-defined allowlist
+4. Input screening - Prompt injection and malicious pattern detection
 
 Public API
 ----------
@@ -17,6 +19,8 @@ Main functions:
 - validate_command: Standalone validation function for testing
 - get_security_profile: Get or create security profile for a project
 - reset_profile_cache: Reset cached security profile
+- screen_input: Screen user input for prompt injection attacks
+- is_input_safe: Quick check if input is safe
 
 Command parsing:
 - extract_commands: Extract command names from shell strings
@@ -24,6 +28,12 @@ Command parsing:
 
 Validators:
 - All validators are available via the VALIDATORS dict
+
+Input screening:
+- InputScreener: Main screening class
+- ScreeningResult: Result dataclass with verdict and patterns
+- ScreeningVerdict: Enum of possible verdicts (safe/suspicious/rejected)
+- ScreeningLevel: Enum of screening strictness levels
 """
 
 # Core hooks
@@ -54,6 +64,29 @@ from .profile import (
 from .tool_input_validator import (
     get_safe_tool_input,
     validate_tool_input,
+)
+
+# Input harmlessness screening
+from .input_screener import (
+    DetectedPattern,
+    InputScreener,
+    ScreeningLevel,
+    ScreeningResult,
+    ScreeningVerdict,
+    is_input_safe,
+    screen_input,
+)
+
+# Screening user messages
+from .screening_messages import (
+    MessageCategory,
+    OutputFormat,
+    format_for_plain,
+    format_for_terminal,
+    format_for_ui,
+    get_rejection_message,
+    get_suggestions_for_category,
+    get_user_friendly_rejection,
 )
 
 # Validators (for advanced usage)
@@ -113,4 +146,21 @@ __all__ = [
     # Tool input validation
     "validate_tool_input",
     "get_safe_tool_input",
+    # Input harmlessness screening
+    "InputScreener",
+    "screen_input",
+    "is_input_safe",
+    "ScreeningResult",
+    "ScreeningVerdict",
+    "ScreeningLevel",
+    "DetectedPattern",
+    # Screening user messages
+    "MessageCategory",
+    "OutputFormat",
+    "get_rejection_message",
+    "get_user_friendly_rejection",
+    "get_suggestions_for_category",
+    "format_for_terminal",
+    "format_for_plain",
+    "format_for_ui",
 ]

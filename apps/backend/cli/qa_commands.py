@@ -75,6 +75,7 @@ def handle_qa_command(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None,
     verbose: bool = False,
 ) -> None:
     """
@@ -87,8 +88,14 @@ def handle_qa_command(
         verbose: Enable verbose output
     """
     print_banner()
+    from phase_config import get_phase_model, get_phase_provider
+
+    qa_provider = get_phase_provider(spec_dir, "qa", provider)
+    qa_model = get_phase_model(spec_dir, "qa", model, provider)
+
     print(f"\nRunning QA validation for: {spec_dir.name}")
-    if not validate_environment(spec_dir):
+    print(f"QA Model: {qa_provider}:{qa_model}")
+    if not validate_environment(spec_dir, qa_provider):
         sys.exit(1)
 
     # Check if there's pending human feedback that needs to be processed
@@ -113,7 +120,8 @@ def handle_qa_command(
             run_qa_validation_loop(
                 project_dir=project_dir,
                 spec_dir=spec_dir,
-                model=model,
+                model=qa_model,
+                provider=provider,
                 verbose=verbose,
             )
         )

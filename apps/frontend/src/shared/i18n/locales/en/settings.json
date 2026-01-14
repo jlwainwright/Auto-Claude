@@ -358,37 +358,17 @@
     "phaseConfiguration": "Phase Configuration",
     "phaseConfigurationDescription": "Customize model and thinking level for each phase",
     "clickToCustomize": "Click to customize",
+    "provider": "Provider",
     "model": "Model",
     "thinking": "Thinking",
     "thinkingLevel": "Thinking Level",
+    "selectProvider": "Select provider",
     "selectModel": "Select model",
     "selectThinkingLevel": "Select thinking level",
     "perPhaseOptimization": "(per-phase optimization)",
     "resetToDefaults": "Reset to defaults",
     "resetToProfileDefaults": "Reset to {{profile}} defaults",
     "customized": "Customized",
-    "customProfiles": {
-      "add": "Add Custom Profile",
-      "addTitle": "Add Custom Profile",
-      "editTitle": "Edit Custom Profile",
-      "badge": "Custom",
-      "edit": "Edit profile",
-      "delete": "Delete profile",
-      "deleteTitle": "Delete custom profile?",
-      "deleteDescription": "This will permanently remove \"{{name}}\".",
-      "dialogDescription": "Create a saved preset you can select as your default agent profile.",
-      "readOnlyHint": "To customize this preset, create a custom profile.",
-      "fields": {
-        "name": "Name",
-        "namePlaceholder": "e.g., GLM Coding",
-        "description": "Description",
-        "descriptionPlaceholder": "Optional"
-      },
-      "validation": {
-        "nameRequired": "Name is required.",
-        "saveFailed": "Failed to save profile."
-      }
-    },
     "phaseConfigNote": "These settings will be used as defaults when creating new tasks with this profile. You can override them per-task in the task creation wizard.",
     "phases": {
       "spec": {
@@ -459,18 +439,10 @@
     "apiKeysInfo": "Keys set here are used as defaults. Individual projects can override these in their settings.",
     "openaiKey": "OpenAI API Key",
     "openaiKeyDescription": "Required for Graphiti memory backend (embeddings)",
-    "toast": {
-      "authSuccess": "Profile Authenticated",
-      "authSuccessWithEmail": "Connected as {{email}}",
-      "authSuccessGeneric": "Authentication complete. You can now use this profile.",
-      "authStartFailed": "Authentication Failed",
-      "addProfileFailed": "Failed to Add Profile",
-      "tokenSaved": "Token Saved",
-      "tokenSavedDescription": "Your token has been saved successfully.",
-      "tokenSaveFailed": "Failed to Save Token",
-      "settingsUpdateFailed": "Failed to Update Settings",
-      "tryAgain": "Please try again."
-    }
+    "zaiKey": "Z.AI API Key",
+    "zaiKeyDescription": "Used for Z.AI (GLM) models when selected as provider",
+    "zaiBaseUrl": "Z.AI Base URL",
+    "zaiBaseUrlDescription": "Override the default Z.AI OpenAI-compatible endpoint (optional)"
   },
   "debug": {
     "title": "Debug & Logs",

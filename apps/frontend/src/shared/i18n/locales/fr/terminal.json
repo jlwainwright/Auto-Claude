@@ -5,7 +5,9 @@
   },
   "auth": {
     "terminalTitle": "Auth: {{profileName}}",
-    "maxTerminalsReached": "Impossible d'ouvrir le terminal d'auth: nombre maximum de terminaux atteint. Fermez un terminal d'abord."
+    "maxTerminalsReached": "Impossible d'ouvrir le terminal d'auth: nombre maximum de terminaux atteint. Fermez un terminal d'abord.",
+    "listenerUnavailableTitle": "Terminal d'auth indisponible",
+    "listenerUnavailableDescription": "Les evenements du terminal d'auth ne sont pas disponibles dans cet environnement. Redemarrez l'application ou utilisez la version desktop."
   },
   "worktree": {
     "create": "Worktree",

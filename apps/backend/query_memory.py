@@ -11,6 +11,10 @@ Usage:
     python query_memory.py search <db-path> <database> <query> [--limit N]
     python query_memory.py semantic-search <db-path> <database> <query> [--limit N]
     python query_memory.py get-entities <db-path> <database> [--limit N]
+    python query_memory.py get-edges <db-path> <database> [--limit N]
+    python query_memory.py get-stats <db-path> <database>
+    python query_memory.py delete-episode <db-path> <database> <uuid>
+    python query_memory.py update-episode <db-path> <database> <uuid> [--content CONTENT] [--name NAME]
 
 Output:
     JSON to stdout with structure: {"success": bool, "data": ..., "error": ...}
@@ -97,6 +101,18 @@ def get_db_connection(db_path: str, database: str):
         return conn, None
     except Exception as e:
         return None, str(e)
+
+
+def get_directory_size(path: Path) -> int:
+    """Calculate total size of a directory in bytes."""
+    total_size = 0
+    try:
+        for item in path.rglob("*"):
+            if item.is_file():
+                total_size += item.stat().st_size
+    except Exception:
+        pass
+    return total_size
 
 
 def cmd_get_status(args):
@@ -621,6 +637,343 @@ def cmd_add_episode(args):
         output_error(f"Failed to add episode: {e}")
 
 
+def cmd_get_edges(args):
+    """Get relationships (edges) between episodes and entities."""
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    conn, error = get_db_connection(args.db_path, args.database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        limit = args.limit or 100
+
+        # Query all relationship types
+        # Graphiti creates various relationship tables, we query them dynamically
+        edges = []
+
+        # Get all relationship tables by querying the schema
+        try:
+            # First, try to get edges from the ABSTRACT_HAS_EPISODE relationship
+            # This connects entities to episodes
+            query = """
+                MATCH (e:Entity)-[r:ABSTRACT_HAS_EPISODE]->(ep:Episodic)
+                RETURN e.uuid as source_id, e.name as source_name,
+                       ep.uuid as target_id, ep.name as target_name,
+                       'ABSTRACT_HAS_EPISODE' as relationship_type
+                LIMIT $limit
+            """
+            result = conn.execute(query, parameters={"limit": limit})
+
+            while result.has_next():
+                row = result.get_next()
+                source_id = serialize_value(row[0]) if len(row) > 0 else ""
+                source_name = serialize_value(row[1]) if len(row) > 1 else ""
+                target_id = serialize_value(row[2]) if len(row) > 2 else ""
+                target_name = serialize_value(row[3]) if len(row) > 3 else ""
+                rel_type = serialize_value(row[4]) if len(row) > 4 else "RELATED_TO"
+
+                edges.append({
+                    "source": source_id,
+                    "target": target_id,
+                    "source_name": source_name,
+                    "target_name": target_name,
+                    "relationship_type": rel_type,
+                })
+        except Exception as e:
+            # Table might not exist, continue
+            if "ABSTRACT_HAS_EPISODE" not in str(e):
+                sys.stderr.write(f"Error querying ABSTRACT_HAS_EPISODE: {e}\n")
+
+        # Try to get edges from other common relationship types
+        # Graphiti creates various relationships like HAS_ENTITY, RELATED_TO, etc.
+        relationship_types = [
+            "RELATED_TO",
+            "MENTIONED_IN",
+            "ABOUT",
+            "HAS_CONTEXT",
+        ]
+
+        for rel_type in relationship_types:
+            if len(edges) >= limit:
+                break
+            try:
+                # Try different patterns to find relationships
+                query = f"""
+                    MATCH (a {{uuid: $uuid1}})-[r:{rel_type}]->(b {{uuid: $uuid2}})
+                    RETURN a.uuid as source_id, a.name as source_name,
+                           b.uuid as target_id, b.name as target_name,
+                           '{rel_type}' as relationship_type
+                    LIMIT $limit
+                """
+
+                # We need to use a simpler approach - just try to match any nodes with this relationship
+                query_simple = f"""
+                    MATCH (a)-[r:{rel_type}]->(b)
+                    RETURN a.uuid as source_id, a.name as source_name,
+                           b.uuid as target_id, b.name as target_name,
+                           '{rel_type}' as relationship_type
+                    LIMIT $limit
+                """
+
+                result = conn.execute(query_simple, parameters={"limit": limit - len(edges)})
+
+                while result.has_next():
+                    row = result.get_next()
+                    source_id = serialize_value(row[0]) if len(row) > 0 else ""
+                    source_name = serialize_value(row[1]) if len(row) > 1 else ""
+                    target_id = serialize_value(row[2]) if len(row) > 2 else ""
+                    target_name = serialize_value(row[3]) if len(row) > 3 else ""
+                    relationship = serialize_value(row[4]) if len(row) > 4 else rel_type
+
+                    edges.append({
+                        "source": source_id,
+                        "target": target_id,
+                        "source_name": source_name,
+                        "target_name": target_name,
+                        "relationship_type": relationship,
+                    })
+            except Exception:
+                # Relationship type might not exist, skip it
+                continue
+
+        output_json(True, data={"edges": edges, "count": len(edges)})
+
+    except Exception as e:
+        output_error(f"Failed to get edges: {e}")
+
+
+def cmd_get_stats(args):
+    """Get storage statistics for the memory database."""
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    db_path = Path(args.db_path)
+    database = args.database
+    full_path = db_path / database
+
+    if not full_path.exists():
+        output_json(
+            True,
+            data={
+                "episode_count": 0,
+                "entity_count": 0,
+                "edge_count": 0,
+                "storage_bytes": 0,
+                "storage_human": "0 B",
+            },
+        )
+        return
+
+    conn, error = get_db_connection(str(db_path), database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        # Count episodes
+        episode_count = 0
+        try:
+            result = conn.execute("MATCH (e:Episodic) RETURN count(e) as count")
+            if result.has_next():
+                row = result.get_next()
+                episode_count = int(row[0]) if row[0] is not None else 0
+        except Exception:
+            pass
+
+        # Count entities
+        entity_count = 0
+        try:
+            result = conn.execute("MATCH (e:Entity) RETURN count(e) as count")
+            if result.has_next():
+                row = result.get_next()
+                entity_count = int(row[0]) if row[0] is not None else 0
+        except Exception:
+            pass
+
+        # Count edges (sum all relationship types)
+        edge_count = 0
+        try:
+            # Try to count various relationship types
+            result = conn.execute("""
+                MATCH ()-[r]->()
+                RETURN count(r) as count
+            """)
+            if result.has_next():
+                row = result.get_next()
+                edge_count = int(row[0]) if row[0] is not None else 0
+        except Exception:
+            pass
+
+        # Calculate storage size
+        storage_bytes = get_directory_size(full_path)
+
+        # Convert to human-readable format
+        def human_readable_size(size_bytes: int) -> str:
+            if size_bytes == 0:
+                return "0 B"
+            for unit in ["B", "KB", "MB", "GB"]:
+                if size_bytes < 1024.0:
+                    return f"{size_bytes:.1f} {unit}"
+                size_bytes /= 1024.0
+            return f"{size_bytes:.1f} TB"
+
+        output_json(
+            True,
+            data={
+                "episode_count": episode_count,
+                "entity_count": entity_count,
+                "edge_count": edge_count,
+                "storage_bytes": storage_bytes,
+                "storage_human": human_readable_size(storage_bytes),
+            },
+        )
+
+    except Exception as e:
+        output_error(f"Failed to get stats: {e}")
+
+
+def cmd_delete_episode(args):
+    """Delete an episode by UUID."""
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    conn, error = get_db_connection(args.db_path, args.database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        episode_uuid = args.uuid
+
+        # First, check if the episode exists
+        check_query = """
+            MATCH (e:Episodic {uuid: $uuid})
+            RETURN e.name as name, e.uuid as uuid
+        """
+        result = conn.execute(check_query, parameters={"uuid": episode_uuid})
+
+        episode_exists = False
+        episode_name = ""
+
+        if result.has_next():
+            row = result.get_next()
+            if row[0] is not None:
+                episode_exists = True
+                episode_name = serialize_value(row[0])
+
+        if not episode_exists:
+            output_error(f"Episode not found: {episode_uuid}")
+            return
+
+        # Delete the episode
+        # This also deletes connected relationships automatically (CASCADE)
+        delete_query = """
+            MATCH (e:Episodic {uuid: $uuid})
+            DETACH DELETE e
+        """
+        conn.execute(delete_query, parameters={"uuid": episode_uuid})
+
+        output_json(
+            True,
+            data={
+                "deleted": True,
+                "id": episode_uuid,
+                "name": episode_name,
+            },
+        )
+
+    except Exception as e:
+        output_error(f"Failed to delete episode: {e}")
+
+
+def cmd_update_episode(args):
+    """Update an episode's content or name by UUID."""
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    conn, error = get_db_connection(args.db_path, args.database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        episode_uuid = args.uuid
+        updates = {}
+
+        # Build update parameters
+        if args.content:
+            # Validate JSON if content is JSON
+            content = args.content
+            try:
+                # Try to parse as JSON to validate
+                parsed = json.loads(content)
+                # Re-serialize to ensure consistent formatting
+                content = json.dumps(parsed)
+            except json.JSONDecodeError:
+                # If not valid JSON, use as-is
+                pass
+            updates["content"] = content
+
+        if args.name:
+            updates["name"] = args.name
+
+        if not updates:
+            output_error("No updates provided. Use --content or --name")
+            return
+
+        # Check if episode exists
+        check_query = """
+            MATCH (e:Episodic {uuid: $uuid})
+            RETURN e.name as name, e.uuid as uuid
+        """
+        result = conn.execute(check_query, parameters={"uuid": episode_uuid})
+
+        if not result.has_next() or result.get_next()[0] is None:
+            output_error(f"Episode not found: {episode_uuid}")
+            return
+
+        # Build the SET clause dynamically
+        set_clauses = []
+        for key in updates:
+            set_clauses.append(f"e.{key} = ${key}")
+
+        update_query = f"""
+            MATCH (e:Episodic {{uuid: $uuid}})
+            SET {', '.join(set_clauses)}
+            RETURN e.uuid as uuid, e.name as name, e.content as content
+        """
+
+        params = {"uuid": episode_uuid, **updates}
+        result = conn.execute(update_query, parameters=params)
+
+        updated_episode = None
+        if result.has_next():
+            row = result.get_next()
+            updated_episode = {
+                "id": serialize_value(row[0]) if len(row) > 0 else episode_uuid,
+                "name": serialize_value(row[1]) if len(row) > 1 else "",
+                "content": serialize_value(row[2]) if len(row) > 2 else "",
+            }
+
+        output_json(
+            True,
+            data={
+                "updated": True,
+                "episode": updated_episode,
+            },
+        )
+
+    except Exception as e:
+        output_error(f"Failed to update episode: {e}")
+
+
 def infer_episode_type(name: str, content: str = "") -> str:
     """Infer the episode type from its name and content."""
     name_lower = (name or "").lower()
@@ -734,6 +1087,45 @@ def main():
         "--group-id", dest="group_id", help="Optional group ID for namespacing"
     )
 
+    # get-edges command
+    edges_parser = subparsers.add_parser(
+        "get-edges", help="Get relationships (edges) between episodes and entities"
+    )
+    edges_parser.add_argument("db_path", help="Path to database directory")
+    edges_parser.add_argument("database", help="Database name")
+    edges_parser.add_argument(
+        "--limit", type=int, default=100, help="Maximum results"
+    )
+
+    # get-stats command
+    stats_parser = subparsers.add_parser(
+        "get-stats", help="Get storage statistics"
+    )
+    stats_parser.add_argument("db_path", help="Path to database directory")
+    stats_parser.add_argument("database", help="Database name")
+
+    # delete-episode command
+    delete_parser = subparsers.add_parser(
+        "delete-episode", help="Delete an episode by UUID"
+    )
+    delete_parser.add_argument("db_path", help="Path to database directory")
+    delete_parser.add_argument("database", help="Database name")
+    delete_parser.add_argument("uuid", help="Episode UUID to delete")
+
+    # update-episode command
+    update_parser = subparsers.add_parser(
+        "update-episode", help="Update an episode's content or name"
+    )
+    update_parser.add_argument("db_path", help="Path to database directory")
+    update_parser.add_argument("database", help="Database name")
+    update_parser.add_argument("uuid", help="Episode UUID to update")
+    update_parser.add_argument(
+        "--content", help="New content (JSON string or text)"
+    )
+    update_parser.add_argument(
+        "--name", help="New name/title"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -749,6 +1141,10 @@ def main():
         "semantic-search": cmd_semantic_search,
         "get-entities": cmd_get_entities,
         "add-episode": cmd_add_episode,
+        "get-edges": cmd_get_edges,
+        "get-stats": cmd_get_stats,
+        "delete-episode": cmd_delete_episode,
+        "update-episode": cmd_update_episode,
     }
 
     handler = commands.get(args.command)

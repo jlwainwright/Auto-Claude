@@ -2,10 +2,17 @@
  * Task-related types
  */
 
-import type { ThinkingLevel, PhaseModelConfig, PhaseThinkingConfig } from './settings';
-import type { ExecutionPhase as ExecutionPhaseType, CompletablePhase } from '../constants/phase-protocol';
+import type {
+  ThinkingLevel,
+  PhaseModelConfig,
+  PhaseThinkingConfig,
+  PhaseProviderConfig,
+  ProviderId,
+  ModelId
+} from './settings';
+import type { ExecutionPhase as ExecutionPhaseType } from '../constants/phase-protocol';
 
-export type TaskStatus = 'backlog' | 'in_progress' | 'ai_review' | 'human_review' | 'pr_created' | 'done' | 'error';
+export type TaskStatus = 'backlog' | 'in_progress' | 'ai_review' | 'human_review' | 'pr_created' | 'done';
 
 // Reason why a task is in human_review status
 // - 'completed': All subtasks done and QA passed, ready for final approval/merge
@@ -27,10 +34,6 @@ export interface ExecutionProgress {
   message?: string;  // Current status message
   startedAt?: Date;
   sequenceNumber?: number;  // Monotonically increasing counter to detect stale updates
-  // FIX (ACS-203): Track completed phases to prevent phase overlaps
-  // When a phase completes, it's added to this array before transitioning to the next phase
-  // This ensures that planning is marked complete before coding starts, etc.
-  completedPhases?: CompletablePhase[];  // Phases that have successfully completed
 }
 
 export interface Subtask {
@@ -145,9 +148,11 @@ export interface TaskDraft {
   profileId?: string;  // Agent profile ID ('auto', 'complex', 'balanced', 'quick', 'custom')
   model: ModelType | '';
   thinkingLevel: ThinkingLevel | '';
+  provider?: ProviderId;
   // Auto profile - per-phase configuration
   phaseModels?: PhaseModelConfig;
   phaseThinking?: PhaseThinkingConfig;
+  phaseProviders?: PhaseProviderConfig;
   images: ImageAttachment[];
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
@@ -160,7 +165,7 @@ export type TaskImpact = 'low' | 'medium' | 'high' | 'critical';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 // Re-export ThinkingLevel (defined in settings.ts) for convenience
 export type { ThinkingLevel };
-export type ModelType = 'haiku' | 'sonnet' | 'opus' | 'glm-4.7' | 'glm-4.5-air';
+export type ModelType = ModelId;
 export type TaskCategory =
   | 'feature'
   | 'bug_fix'
@@ -223,13 +228,14 @@ export interface TaskMetadata {
   requireReviewBeforeCoding?: boolean;  // Require human review of spec/plan before coding starts
 
   // Agent configuration (from agent profile or manual selection)
-  profileId?: string;  // Agent profile ID used for this task (e.g., 'auto', 'balanced', 'custom-...')
-  model?: ModelType;  // Claude model to use (haiku, sonnet, opus) - used when not auto profile
+  model?: ModelType;  // Model to use when not auto profile
   thinkingLevel?: ThinkingLevel;  // Thinking budget level (none, low, medium, high, ultrathink)
-  // Auto profile - per-phase model configuration
+  provider?: ProviderId;
+  // Auto profile - per-phase configuration
   isAutoProfile?: boolean;  // True when using Auto (Optimized) profile
   phaseModels?: PhaseModelConfig;  // Per-phase model configuration
   phaseThinking?: PhaseThinkingConfig;  // Per-phase thinking configuration
+  phaseProviders?: PhaseProviderConfig;  // Per-phase provider configuration
 
   // Git/Worktree configuration
   baseBranch?: string;  // Override base branch for this task's worktree
@@ -239,12 +245,6 @@ export interface TaskMetadata {
   // Archive status
   archivedAt?: string;  // ISO date when task was archived
   archivedInVersion?: string;  // Version in which task was archived (from changelog)
-}
-
-// Structured error information for tasks with parse errors
-export interface TaskErrorInfo {
-  key: string;  // Translation key (e.g., 'errors:task.parseImplementationPlan')
-  meta?: { specId?: string; error?: string };  // Error context for substitution in translation
 }
 
 export interface Task {
@@ -259,7 +259,6 @@ export interface Task {
   qaReport?: QAReport;
   logs: string[];
   metadata?: TaskMetadata;  // Rich metadata from ideation or manual entry
-  errorInfo?: TaskErrorInfo;  // Structured error information for i18n (set when status is 'error')
   executionProgress?: ExecutionProgress;  // Real-time execution progress
   releasedInVersion?: string;  // Version in which this task was released
   stagedInMainProject?: boolean;  // True if changes were staged to main project (worktree merged with --no-commit)
@@ -313,7 +312,6 @@ export interface WorktreeStatus {
   worktreePath?: string;
   branch?: string;
   baseBranch?: string;
-  currentProjectBranch?: string; // User's current checked-out branch in main project (merge target)
   commitCount?: number;
   filesChanged?: number;
   additions?: number;

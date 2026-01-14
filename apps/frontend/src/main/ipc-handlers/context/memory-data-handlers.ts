@@ -6,7 +6,9 @@ import { IPC_CHANNELS, getSpecsDir } from '../../../shared/constants';
 import type {
   IPCResult,
   MemoryEpisode,
-  ContextSearchResult
+  ContextSearchResult,
+  MemoryGraphData,
+  MemoryStorageStats,
 } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { getMemoryService, isKuzuAvailable } from '../../memory-service';
@@ -237,6 +239,171 @@ export function registerMemoryDataHandlers(
       const results = searchFileBasedMemories(specsDir, query, 20);
 
       return { success: true, data: results };
+    }
+  );
+
+  // Get graph data for visualization
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_GET_GRAPH_DATA,
+    async (_, projectId: string): Promise<IPCResult<MemoryGraphData>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      // Graph data is only available from LadybugDB
+      if (!graphitiEnabled || !isKuzuAvailable()) {
+        return {
+          success: false,
+          error: 'Graph data requires LadybugDB to be enabled and available'
+        };
+      }
+
+      try {
+        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
+        const memoryService = getMemoryService({
+          dbPath: dbDetails.dbPath,
+          database: dbDetails.database,
+        });
+        const graphData = await memoryService.getGraphData();
+        return { success: true, data: graphData };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to get graph data';
+        console.error('Failed to get graph data:', errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    }
+  );
+
+  // Get memory storage statistics
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_GET_MEMORY_STATS,
+    async (_, projectId: string): Promise<IPCResult<MemoryStorageStats>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      // Stats are only available from LadybugDB
+      if (!graphitiEnabled || !isKuzuAvailable()) {
+        return {
+          success: false,
+          error: 'Memory stats require LadybugDB to be enabled and available'
+        };
+      }
+
+      try {
+        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
+        const memoryService = getMemoryService({
+          dbPath: dbDetails.dbPath,
+          database: dbDetails.database,
+        });
+        const stats = await memoryService.getStorageStats();
+        if (!stats) {
+          return { success: false, error: 'Failed to retrieve storage stats' };
+        }
+        return { success: true, data: stats };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to get memory stats';
+        console.error('Failed to get memory stats:', errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    }
+  );
+
+  // Delete a memory episode
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_DELETE_MEMORY,
+    async (_, projectId: string, memoryId: string): Promise<IPCResult<void>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      if (!memoryId) {
+        return { success: false, error: 'Memory ID is required' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      // Delete is only available from LadybugDB
+      if (!graphitiEnabled || !isKuzuAvailable()) {
+        return {
+          success: false,
+          error: 'Memory deletion requires LadybugDB to be enabled and available'
+        };
+      }
+
+      try {
+        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
+        const memoryService = getMemoryService({
+          dbPath: dbDetails.dbPath,
+          database: dbDetails.database,
+        });
+        const result = await memoryService.deleteMemory(memoryId);
+        if (!result.success) {
+          return { success: false, error: result.error || 'Failed to delete memory' };
+        }
+        return { success: true, data: undefined };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete memory';
+        console.error('Failed to delete memory:', errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    }
+  );
+
+  // Update a memory episode
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_UPDATE_MEMORY,
+    async (_, projectId: string, memoryId: string, content: string): Promise<IPCResult<void>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      if (!memoryId) {
+        return { success: false, error: 'Memory ID is required' };
+      }
+
+      if (!content) {
+        return { success: false, error: 'Content is required' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      // Update is only available from LadybugDB
+      if (!graphitiEnabled || !isKuzuAvailable()) {
+        return {
+          success: false,
+          error: 'Memory update requires LadybugDB to be enabled and available'
+        };
+      }
+
+      try {
+        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
+        const memoryService = getMemoryService({
+          dbPath: dbDetails.dbPath,
+          database: dbDetails.database,
+        });
+        const result = await memoryService.updateMemory(memoryId, content);
+        if (!result.success) {
+          return { success: false, error: result.error || 'Failed to update memory' };
+        }
+        return { success: true, data: undefined };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to update memory';
+        console.error('Failed to update memory:', errorMsg);
+        return { success: false, error: errorMsg };
+      }
     }
   );
 }

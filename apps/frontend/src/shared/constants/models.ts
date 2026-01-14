@@ -3,31 +3,40 @@
  * Claude models, thinking levels, memory backends, and agent profiles
  */
 
-import type { AgentProfile, PhaseModelConfig, FeatureModelConfig, FeatureThinkingConfig } from '../types/settings';
+import type {
+  AgentProfile,
+  PhaseModelConfig,
+  PhaseProviderConfig,
+  FeatureModelConfig,
+  FeatureThinkingConfig,
+  FeatureProviderConfig
+} from '../types/settings';
 
 // ============================================
 // Available Models
 // ============================================
 
 export const AVAILABLE_MODELS = [
-  // Claude models
   { value: 'opus', label: 'Claude Opus 4.5' },
   { value: 'sonnet', label: 'Claude Sonnet 4.5' },
-  { value: 'haiku', label: 'Claude Haiku 4.5' },
-  // GLM/Z.AI models
+  { value: 'haiku', label: 'Claude Haiku 4.5' }
+] as const;
+
+export const AVAILABLE_ZAI_MODELS = [
   { value: 'glm-4.7', label: 'GLM-4.7' },
   { value: 'glm-4.5-air', label: 'GLM-4.5-Air' }
 ] as const;
 
-// Maps model shorthand to actual model IDs
+export const AVAILABLE_PROVIDERS = [
+  { value: 'claude', label: 'Claude' },
+  { value: 'zai', label: 'Z.AI (GLM)' }
+] as const;
+
+// Maps model shorthand to actual Claude model IDs
 export const MODEL_ID_MAP: Record<string, string> = {
-  // Claude models
   opus: 'claude-opus-4-5-20251101',
   sonnet: 'claude-sonnet-4-5-20250929',
-  haiku: 'claude-haiku-4-5-20251001',
-  // GLM/Z.AI models (full model IDs)
-  'glm-4.7': 'glm-4.7',
-  'glm-4.5-air': 'glm-4.5-air'
+  haiku: 'claude-haiku-4-5-20251001'
 } as const;
 
 // Maps thinking levels to budget tokens (null = no extended thinking)
@@ -123,6 +132,20 @@ export const QUICK_PHASE_THINKING: import('../types/settings').PhaseThinkingConf
 export const DEFAULT_PHASE_MODELS: PhaseModelConfig = BALANCED_PHASE_MODELS;
 export const DEFAULT_PHASE_THINKING: import('../types/settings').PhaseThinkingConfig = BALANCED_PHASE_THINKING;
 
+export const DEFAULT_PHASE_PROVIDERS: PhaseProviderConfig = {
+  spec: 'claude',
+  planning: 'claude',
+  coding: 'claude',
+  qa: 'claude'
+};
+
+export const DEFAULT_ZAI_PHASE_MODELS: PhaseModelConfig = {
+  spec: 'glm-4.7',
+  planning: 'glm-4.7',
+  coding: 'glm-4.7',
+  qa: 'glm-4.7'
+};
+
 // ============================================
 // Feature Settings (Non-Pipeline Features)
 // ============================================
@@ -147,6 +170,16 @@ export const DEFAULT_FEATURE_THINKING: FeatureThinkingConfig = {
   utility: 'low'          // Fast thinking for utility operations
 };
 
+// Default feature provider configuration
+export const DEFAULT_FEATURE_PROVIDERS: FeatureProviderConfig = {
+  insights: 'claude',     // Claude for insights chat
+  ideation: 'claude',     // Claude for ideation
+  roadmap: 'claude',      // Claude for roadmap
+  githubIssues: 'claude', // Claude for GitHub issues
+  githubPrs: 'claude',    // Claude for GitHub PRs
+  utility: 'claude'       // Claude for utility operations
+};
+
 // Feature labels for UI display
 export const FEATURE_LABELS: Record<keyof FeatureModelConfig, { label: string; description: string }> = {
   insights: { label: 'Insights Chat', description: 'Ask questions about your codebase' },
@@ -168,7 +201,8 @@ export const DEFAULT_AGENT_PROFILES: AgentProfile[] = [
     thinkingLevel: 'high',
     icon: 'Sparkles',
     phaseModels: AUTO_PHASE_MODELS,
-    phaseThinking: AUTO_PHASE_THINKING
+    phaseThinking: AUTO_PHASE_THINKING,
+    phaseProviders: DEFAULT_PHASE_PROVIDERS
   },
   {
     id: 'complex',
@@ -178,7 +212,8 @@ export const DEFAULT_AGENT_PROFILES: AgentProfile[] = [
     thinkingLevel: 'ultrathink',
     icon: 'Brain',
     phaseModels: COMPLEX_PHASE_MODELS,
-    phaseThinking: COMPLEX_PHASE_THINKING
+    phaseThinking: COMPLEX_PHASE_THINKING,
+    phaseProviders: DEFAULT_PHASE_PROVIDERS
   },
   {
     id: 'balanced',
@@ -188,7 +223,8 @@ export const DEFAULT_AGENT_PROFILES: AgentProfile[] = [
     thinkingLevel: 'medium',
     icon: 'Scale',
     phaseModels: BALANCED_PHASE_MODELS,
-    phaseThinking: BALANCED_PHASE_THINKING
+    phaseThinking: BALANCED_PHASE_THINKING,
+    phaseProviders: DEFAULT_PHASE_PROVIDERS
   },
   {
     id: 'quick',
@@ -198,7 +234,8 @@ export const DEFAULT_AGENT_PROFILES: AgentProfile[] = [
     thinkingLevel: 'low',
     icon: 'Zap',
     phaseModels: QUICK_PHASE_MODELS,
-    phaseThinking: QUICK_PHASE_THINKING
+    phaseThinking: QUICK_PHASE_THINKING,
+    phaseProviders: DEFAULT_PHASE_PROVIDERS
   }
 ];
 

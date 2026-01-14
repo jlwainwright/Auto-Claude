@@ -30,6 +30,7 @@ class AgentRunner:
         project_dir: Path,
         spec_dir: Path,
         model: str,
+        provider: str | None = None,
         task_logger: TaskLogger | None = None,
     ):
         """Initialize the agent runner.
@@ -43,6 +44,7 @@ class AgentRunner:
         self.project_dir = project_dir
         self.spec_dir = spec_dir
         self.model = model
+        self.provider = provider
         self.task_logger = task_logger
 
     async def run_agent(
@@ -120,6 +122,7 @@ class AgentRunner:
             self.project_dir,
             self.spec_dir,
             self.model,
+            provider=self.provider,
             max_thinking_tokens=thinking_budget,
         )
 

@@ -880,10 +880,10 @@ export function App() {
                 {activeView === 'worktrees' && (activeProjectId || selectedProjectId) && (
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
+                {activeView === 'agent-tools' && <AgentTools />}
                 {activeView === 'status-report' && (activeProjectId || selectedProjectId) && (
                   <StatusReportPage projectId={activeProjectId || selectedProjectId!} />
                 )}
-                {activeView === 'agent-tools' && <AgentTools />}
               </>
             ) : (
               <WelcomeScreen

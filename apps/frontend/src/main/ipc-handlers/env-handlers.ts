@@ -4,13 +4,12 @@ import { IPC_CHANNELS, DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import type { IPCResult, ProjectEnvConfig, ClaudeAuthResult, AppSettings } from '../../shared/types';
 import path from 'path';
 import { app } from 'electron';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { spawn } from 'child_process';
 import { projectStore } from '../project-store';
 import { parseEnvFile } from './utils';
 import { getClaudeCliInvocation, getClaudeCliInvocationAsync } from '../claude-cli-utils';
 import { debugError } from '../../shared/utils/debug-logger';
-import { getSpawnOptions, getSpawnCommand } from '../env-utils';
 
 // GitLab environment variable keys
 const GITLAB_ENV_KEYS = {
@@ -292,9 +291,9 @@ ${existingVars['PUPPETEER_MCP_ENABLED'] !== undefined ? `PUPPETEER_MCP_ENABLED=$
 # Format: AGENT_MCP_<agent_type>_REMOVE=server1,server2
 # =============================================================================
 ${Object.entries(existingVars)
-  .filter(([key]) => key.startsWith('AGENT_MCP_'))
-  .map(([key, value]) => `${key}=${value}`)
-  .join('\n') || '# No per-agent overrides configured'}
+        .filter(([key]) => key.startsWith('AGENT_MCP_'))
+        .map(([key, value]) => `${key}=${value}`)
+        .join('\n') || '# No per-agent overrides configured'}
 
 # =============================================================================
 # CUSTOM MCP SERVERS
@@ -354,7 +353,17 @@ ${existingVars['GRAPHITI_DB_PATH'] ? `GRAPHITI_DB_PATH=${existingVars['GRAPHITI_
         return { success: false, error: 'Project not initialized' };
       }
 
-      const envPath = path.join(project.path, project.autoBuildPath, '.env');
+      let envPath = path.join(project.path, project.autoBuildPath, '.env');
+
+      // Special handling for the Auto Claude (internal) project
+      const isInternalProject = project.name === 'Auto Claude';
+      if (isInternalProject) {
+        const resolvedEnvPath = path.resolve(envPath);
+        if (app.isPackaged || resolvedEnvPath.startsWith('/Applications/')) {
+          const userDataBackend = path.join(app.getPath('userData'), 'backend');
+          envPath = path.join(userDataBackend, '.env');
+        }
+      }
 
       // Load global settings for fallbacks
       let globalSettings: AppSettings = { ...DEFAULT_APP_SETTINGS };
@@ -479,7 +488,7 @@ ${existingVars['GRAPHITI_DB_PATH'] ? `GRAPHITI_DB_PATH=${existingVars['GRAPHITI_
       // Populate graphitiProviderConfig from .env file (embeddings only - no LLM provider)
       const embeddingProvider = vars['GRAPHITI_EMBEDDER_PROVIDER'];
       if (embeddingProvider || vars['AZURE_OPENAI_API_KEY'] ||
-          vars['VOYAGE_API_KEY'] || vars['GOOGLE_API_KEY'] || vars['OLLAMA_BASE_URL']) {
+        vars['VOYAGE_API_KEY'] || vars['GOOGLE_API_KEY'] || vars['OLLAMA_BASE_URL']) {
         config.graphitiProviderConfig = {
           embeddingProvider: (embeddingProvider as 'openai' | 'voyage' | 'azure_openai' | 'ollama' | 'google') || 'ollama',
           // OpenAI Embeddings
@@ -559,7 +568,21 @@ ${existingVars['GRAPHITI_DB_PATH'] ? `GRAPHITI_DB_PATH=${existingVars['GRAPHITI_
         return { success: false, error: 'Project not initialized' };
       }
 
-      const envPath = path.join(project.path, project.autoBuildPath, '.env');
+      let envPath = path.join(project.path, project.autoBuildPath, '.env');
+
+      // Special handling for the Auto Claude (internal) project
+      // same logic as ENV_GET to prevent EPERM writes in dev when path is stale
+      const isInternalProject = project.name === 'Auto Claude';
+      if (isInternalProject) {
+        const resolvedEnvPath = path.resolve(envPath);
+        if (app.isPackaged || resolvedEnvPath.startsWith('/Applications/')) {
+          const userDataBackend = path.join(app.getPath('userData'), 'backend');
+          if (!existsSync(userDataBackend)) {
+            mkdirSync(userDataBackend, { recursive: true });
+          }
+          envPath = path.join(userDataBackend, '.env');
+        }
+      }
 
       try {
         // Read existing content if file exists
@@ -603,10 +626,11 @@ ${existingVars['GRAPHITI_DB_PATH'] ? `GRAPHITI_DB_PATH=${existingVars['GRAPHITI_
       try {
         // Check if Claude CLI is available and authenticated
         const result = await new Promise<ClaudeAuthResult>((resolve) => {
-          const proc = spawn(getSpawnCommand(claudeCmd), ['--version'], getSpawnOptions(claudeCmd, {
+          const proc = spawn(claudeCmd, ['--version'], {
             cwd: project.path,
             env: claudeEnv,
-          }));
+            shell: false
+          });
 
           let _stdout = '';
           let _stderr = '';
@@ -623,10 +647,11 @@ ${existingVars['GRAPHITI_DB_PATH'] ? `GRAPHITI_DB_PATH=${existingVars['GRAPHITI_
             if (code === 0) {
               // Claude CLI is available, check if authenticated
               // Run a simple command that requires auth
-              const authCheck = spawn(getSpawnCommand(claudeCmd), ['api', '--help'], getSpawnOptions(claudeCmd, {
+              const authCheck = spawn(claudeCmd, ['api', '--help'], {
                 cwd: project.path,
                 env: claudeEnv,
-              }));
+                shell: false
+              });
 
               authCheck.on('close', (authCode: number | null) => {
                 resolve({
@@ -692,11 +717,12 @@ ${existingVars['GRAPHITI_DB_PATH'] ? `GRAPHITI_DB_PATH=${existingVars['GRAPHITI_
       try {
         // Run claude setup-token which will open browser for OAuth
         const result = await new Promise<ClaudeAuthResult>((resolve) => {
-          const proc = spawn(getSpawnCommand(claudeCmd), ['setup-token'], getSpawnOptions(claudeCmd, {
+          const proc = spawn(claudeCmd, ['setup-token'], {
             cwd: project.path,
             env: claudeEnv,
+            shell: false,
             stdio: 'inherit' // This allows the terminal to handle the interactive auth
-          }));
+          });
 
           proc.on('close', (code: number | null) => {
             if (code === 0) {

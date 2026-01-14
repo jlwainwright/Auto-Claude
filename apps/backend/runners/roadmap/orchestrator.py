@@ -28,6 +28,7 @@ class RoadmapOrchestrator:
         project_dir: Path,
         output_dir: Path | None = None,
         model: str = "sonnet",  # Changed from "opus" (fix #433)
+        provider: str | None = None,
         thinking_level: str = "medium",
         refresh: bool = False,
         enable_competitor_analysis: bool = False,
@@ -35,6 +36,7 @@ class RoadmapOrchestrator:
     ):
         self.project_dir = Path(project_dir)
         self.model = model
+        self.provider = provider
         self.thinking_level = thinking_level
         self.thinking_budget = get_thinking_budget(thinking_level)
         self.refresh = refresh
@@ -54,11 +56,30 @@ class RoadmapOrchestrator:
 
         # Initialize executors
         self.script_executor = ScriptExecutor(self.project_dir)
+        
+        # Create provider-aware client function
+        def create_client_with_provider(
+            project_dir: Path,
+            spec_dir: Path,
+            model: str,
+            agent_type: str | None = None,
+            max_thinking_tokens: int | None = None,
+        ):
+            """Create client with provider from orchestrator."""
+            return create_client(
+                project_dir,
+                spec_dir,
+                model,
+                provider=self.provider,
+                agent_type=agent_type,
+                max_thinking_tokens=max_thinking_tokens,
+            )
+        
         self.agent_executor = AgentExecutor(
             self.project_dir,
             self.output_dir,
             self.model,
-            create_client,
+            create_client_with_provider,
             self.thinking_budget,
         )
 
