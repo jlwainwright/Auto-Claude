@@ -18,6 +18,7 @@ from linear_updater import (
     linear_task_started,
     linear_task_stuck,
 )
+from slack_integration import is_slack_enabled, slack_subtask_update
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
 from progress import (
@@ -380,6 +381,7 @@ async def run_autonomous_agent(
             linear_is_enabled = (
                 linear_task is not None and linear_task.task_id is not None
             )
+            slack_is_enabled = is_slack_enabled()
             success = await post_session_processing(
                 spec_dir=spec_dir,
                 project_dir=project_dir,
@@ -392,6 +394,17 @@ async def run_autonomous_agent(
                 status_manager=status_manager,
                 source_spec_dir=source_spec_dir,
             )
+
+            # Send Slack notification for subtask completion
+            if slack_is_enabled and success:
+                await slack_subtask_update(
+                    spec_dir=spec_dir,
+                    project_dir=project_dir,
+                    subtask_id=subtask_id,
+                    subtask_title=next_subtask.get("description", ""),
+                    old_status="pending",
+                    new_status="completed",
+                )
 
             # Check for stuck subtasks
             attempt_count = recovery_manager.get_attempt_count(subtask_id)
