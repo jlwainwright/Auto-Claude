@@ -470,3 +470,25 @@ export interface RoadmapProviderConfig {
  * Canny-specific status values
  */
 export type CannyStatus = 'open' | 'under review' | 'planned' | 'in progress' | 'complete' | 'closed';
+
+// ============================================
+// Slack Integration Types
+// ============================================
+
+export interface SlackConfig {
+  enabled: boolean;
+  webhookUrl?: string;
+  channel?: string;
+  notifyBuildStart?: boolean;
+  notifyBuildComplete?: boolean;
+  notifyBuildFailed?: boolean;
+  notifySpecApproval?: boolean;
+}
+
+export interface SlackSyncStatus {
+  connected: boolean;
+  channelName?: string;
+  webhookValid?: boolean;
+  lastNotifiedAt?: string;
+  error?: string;
+}
