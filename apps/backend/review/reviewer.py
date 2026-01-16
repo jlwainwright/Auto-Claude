@@ -6,6 +6,7 @@ Main review checkpoint logic including interactive menu, user prompts,
 and file editing capabilities.
 """
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -245,6 +246,57 @@ def run_review_checkpoint(
     print()
     print(box(content, width=70, style="heavy"))
 
+    # Send Slack notification for spec approval request
+    try:
+        from slack_integration import send_spec_approval_request, is_slack_enabled
+        import json
+
+        if is_slack_enabled(spec_dir.parent):  # project_dir is parent of spec_dir
+            # Read spec details
+            spec_file = spec_dir / "spec.md"
+            plan_file = spec_dir / "implementation_plan.json"
+
+            spec_name = spec_dir.name
+            description = ""
+            requirements = []
+
+            if spec_file.exists():
+                spec_content = spec_file.read_text()
+                # Extract first line or heading as description
+                for line in spec_content.split("\n")[:10]:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        description = line
+                        break
+                    elif line.startswith("## ") or line.startswith("### "):
+                        description = line.lstrip("#").strip()
+                        break
+
+            if plan_file.exists():
+                try:
+                    plan_data = json.loads(plan_file.read_text())
+                    # Extract requirements from spec if available
+                    if "description" in plan_data:
+                        description = plan_data["description"][:200]
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
+            # Send notification asynchronously
+            asyncio.run(send_spec_approval_request(
+                spec_dir=spec_dir,
+                project_dir=spec_dir.parent,
+                spec_name=spec_name,
+                spec_id=spec_name,
+                description=description,
+                requirements=requirements if requirements else None
+            ))
+    except ImportError:
+        # Slack integration not available - skip notification
+        pass
+    except Exception:
+        # Slack notification failed - don't block review process
+        pass
+
     # Main review loop with graceful Ctrl+C handling
     try:
         while True:
@@ -277,6 +329,26 @@ def run_review_checkpoint(
                 state.approve(spec_dir, approved_by="user")
                 print()
                 print_status("Spec approved! Ready to start build.", "success")
+
+                # Send Slack notification for approval
+                try:
+                    from slack_integration import is_slack_enabled
+                    from integrations.slack.integration import SlackManager
+
+                    if is_slack_enabled(spec_dir.parent):
+                        try:
+                            manager = SlackManager(spec_dir, spec_dir.parent)
+                            # Update the approval message to show approved status
+                            asyncio.run(manager.notify_approval_decision(
+                                spec_dir.name,
+                                approved=True,
+                                approved_by="user"
+                            ))
+                        except Exception:
+                            pass  # Don't block on notification failure
+                except ImportError:
+                    pass
+
                 return state
 
             elif choice == ReviewChoice.EDIT_SPEC.value:
@@ -326,6 +398,26 @@ def run_review_checkpoint(
                     muted("You can edit the spec and try again later."),
                 ]
                 print(box(content, width=60, style="heavy"))
+
+                # Send Slack notification for rejection
+                try:
+                    from slack_integration import is_slack_enabled
+                    from integrations.slack.integration import SlackManager
+
+                    if is_slack_enabled(spec_dir.parent):
+                        try:
+                            manager = SlackManager(spec_dir, spec_dir.parent)
+                            # Update the approval message to show rejected status
+                            asyncio.run(manager.notify_approval_decision(
+                                spec_dir.name,
+                                approved=False,
+                                approved_by="user"
+                            ))
+                        except Exception:
+                            pass  # Don't block on notification failure
+                except ImportError:
+                    pass
+
                 sys.exit(1)
 
     except KeyboardInterrupt:

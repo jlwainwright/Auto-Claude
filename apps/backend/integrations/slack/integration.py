@@ -597,6 +597,90 @@ Available Slack MCP tools:
             self.state.approval_ts = timestamp
             self.state.save(self.spec_dir)
 
+    async def notify_approval_decision(
+        self,
+        spec_name: str,
+        approved: bool,
+        approved_by: str = "user",
+    ) -> bool:
+        """
+        Update the approval request message with the approval decision.
+
+        Args:
+            spec_name: Name of the spec
+            approved: Whether the spec was approved (True) or rejected (False)
+            approved_by: Who approved/rejected (e.g., "user", "slack")
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_enabled or not self.state:
+            return False
+
+        if not self.state.approval_ts:
+            # No approval message to update
+            return False
+
+        try:
+            from slack_integration import _update_message_in_slack
+
+            # Build update message
+            status_emoji = "✅" if approved else "❌"
+            status_text = "APPROVED" if approved else "REJECTED"
+            color = "#36a64f" if approved else "#dc3545"
+
+            message = {
+                "attachments": [
+                    {
+                        "color": color,
+                        "blocks": [
+                            {
+                                "type": "header",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": f"{status_emoji} Spec {status_text}",
+                                    "emoji": True,
+                                },
+                            },
+                            {
+                                "type": "section",
+                                "fields": [
+                                    {
+                                        "type": "mrkdwn",
+                                        "text": f"*Spec:*\n{spec_name}",
+                                    },
+                                    {
+                                        "type": "mrkdwn",
+                                        "text": f"*Decision:*\n{status_text}",
+                                    },
+                                    {
+                                        "type": "mrkdwn",
+                                        "text": f"*By:*\n{approved_by}",
+                                    },
+                                    {
+                                        "type": "mrkdwn",
+                                        "text": f"*When:*\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                                    },
+                                ],
+                            },
+                        ],
+                    }
+                ]
+            }
+
+            # Update the approval message
+            await _update_message_in_slack(
+                spec_dir=self.spec_dir,
+                project_dir=self.project_dir,
+                channel_id=self.state.channel_id,
+                message_ts=self.state.approval_ts,
+                message_updates=message,
+            )
+
+            return True
+        except Exception:
+            return False
+
 
 # Utility functions for integration with other modules
 
