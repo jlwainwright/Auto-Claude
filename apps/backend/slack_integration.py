@@ -10,6 +10,7 @@ from integrations.slack.config import (
     SlackConfig,
     SlackProjectState,
     format_build_notification,
+    format_qa_approval_notification,
     format_qa_request,
     format_slack_message,
     format_spec_approval_request,
@@ -32,6 +33,7 @@ from integrations.slack.updater import (
     slack_build_completed,
     slack_build_failed,
     slack_build_started,
+    slack_qa_approval,
 )
 
 __all__ = [
@@ -40,6 +42,7 @@ __all__ = [
     "SlackConfig",
     "SlackProjectState",
     "format_build_notification",
+    "format_qa_approval_notification",
     "format_qa_request",
     "format_slack_message",
     "format_spec_approval_request",
@@ -58,4 +61,5 @@ __all__ = [
     "slack_build_completed",
     "slack_build_failed",
     "slack_build_started",
+    "slack_qa_approval",
 ]

@@ -577,3 +577,73 @@ async def send_spec_approval_request(
     except Exception as e:
         print(f"Failed to send spec approval request: {e}")
         return False
+
+
+async def slack_qa_approval(
+    spec_dir: Path,
+    project_dir: Path,
+    spec_name: str,
+    qa_status: str,
+    qa_session: int,
+    issues_count: int = 0,
+    report_path: str | None = None,
+) -> bool:
+    """
+    Send a QA approval/rejection notification to Slack.
+
+    Called after QA reviewer completes validation.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        spec_name: Name of the spec
+        qa_status: "approved" or "rejected"
+        qa_session: QA session number
+        issues_count: Number of issues found (if rejected)
+        report_path: Path to QA report (optional)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not is_slack_enabled():
+        return False
+
+    try:
+        manager = SlackManager(spec_dir, project_dir)
+
+        if not manager.is_initialized:
+            return False
+
+        # Check if QA notifications are enabled
+        preferences = manager.get_notification_preferences()
+        if not preferences.get("notify_qa_approval", True):
+            return False
+
+        # Prepare message data
+        message_data = manager.send_qa_approval_notification(
+            spec_name=spec_name,
+            qa_status=qa_status,
+            qa_session=qa_session,
+            issues_count=issues_count,
+            report_path=report_path,
+        )
+
+        if not message_data:
+            return False
+
+        channel_id = message_data["channel_id"]
+        message = message_data["message"]
+
+        # Send message via MCP
+        message_ts = await _send_message_to_slack(channel_id, message)
+        if message_ts:
+            manager.increment_message_count()
+            status_text = "approved" if qa_status == "approved" else "rejected"
+            print(f"QA {status_text} notification sent to Slack: {message_ts}")
+            return True
+
+        return False
+
+    except Exception as e:
+        print(f"Failed to send QA approval notification: {e}")
+        return False

@@ -14,6 +14,7 @@ from pathlib import Path
 
 # Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
+from slack_integration import is_slack_enabled, slack_qa_approval
 from typing import Any
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from prompts_pkg import get_qa_reviewer_prompt
@@ -350,6 +351,17 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                 subtasks_completed=[f"qa_reviewer_{qa_session}"],
                 discoveries=qa_discoveries,
             )
+
+            # Send Slack notification for QA approval
+            if is_slack_enabled():
+                await slack_qa_approval(
+                    spec_dir=spec_dir,
+                    project_dir=project_dir,
+                    spec_name=spec_dir.name,
+                    qa_status="approved",
+                    qa_session=qa_session,
+                )
+
             return "approved", response_text
         elif status and status.get("status") == "rejected":
             debug_error("qa_reviewer", "QA REJECTED")
@@ -369,6 +381,20 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                 subtasks_completed=[],
                 discoveries=qa_discoveries,
             )
+
+            # Send Slack notification for QA rejection
+            if is_slack_enabled():
+                qa_report_path = spec_dir / "qa_report.md"
+                await slack_qa_approval(
+                    spec_dir=spec_dir,
+                    project_dir=project_dir,
+                    spec_name=spec_dir.name,
+                    qa_status="rejected",
+                    qa_session=qa_session,
+                    issues_count=len(issues),
+                    report_path=str(qa_report_path) if qa_report_path.exists() else None,
+                )
+
             return "rejected", response_text
         else:
             # Agent didn't update the status properly - provide detailed error

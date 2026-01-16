@@ -19,6 +19,7 @@ MESSAGE_BUILD_FAIL = "build_fail"
 MESSAGE_SPEC_APPROVAL = "spec_approval"
 MESSAGE_SUBTASK_UPDATE = "subtask_update"
 SESSION_QA_REQUEST = "qa_request"
+MESSAGE_QA_APPROVAL = "qa_approval"
 
 # Slack project marker file (stores channel IDs and state)
 SLACK_PROJECT_MARKER = ".slack_project.json"
@@ -548,5 +549,57 @@ def format_qa_request(
         title=title,
         text=text,
         actions=actions,
+        footer=footer,
+    )
+
+
+def format_qa_approval_notification(
+    spec_name: str,
+    qa_status: str,
+    qa_session: int,
+    issues_count: int = 0,
+    report_path: str | None = None,
+) -> dict:
+    """
+    Format a QA approval/rejection notification message.
+
+    Args:
+        spec_name: Name of the spec
+        qa_status: "approved" or "rejected"
+        qa_session: QA session number
+        issues_count: Number of issues found (if rejected)
+        report_path: Path to QA report (optional)
+
+    Returns:
+        Slack message dict with approval status
+    """
+    if qa_status == "approved":
+        title = "✅ QA Approved"
+        emoji = "white_check_mark"
+        status = "success"
+        text = (
+            f"*{spec_name}* has passed QA review and is ready for merge.\n"
+            f"*QA Session:* {qa_session}\n"
+            f"*Status:* All acceptance criteria validated"
+        )
+        footer = "Build approved - ready for production"
+    else:  # rejected
+        title = "❌ QA Rejected"
+        emoji = "x"
+        status = "danger"
+        text = (
+            f"*{spec_name}* has been rejected by QA review.\n"
+            f"*QA Session:* {qa_session}\n"
+            f"*Issues Found:* {issues_count}\n"
+        )
+        if report_path:
+            text += f"*Report:* `{report_path}`\n"
+        footer = "Fixes required - see QA report for details"
+
+    return format_slack_message(
+        message_type=MESSAGE_QA_APPROVAL,
+        title=title,
+        text=text,
+        status=status,
         footer=footer,
     )

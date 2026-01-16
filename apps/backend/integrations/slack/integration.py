@@ -25,6 +25,7 @@ from .config import (
     MESSAGE_BUILD_COMPLETE,
     MESSAGE_BUILD_FAIL,
     MESSAGE_BUILD_START,
+    MESSAGE_QA_APPROVAL,
     MESSAGE_SPEC_APPROVAL,
     MESSAGE_SUBTASK_UPDATE,
     SESSION_QA_REQUEST,
@@ -401,6 +402,46 @@ class SlackManager:
             "channel_id": self.state.channel_id,
             "message": message,
             "message_type": SESSION_QA_REQUEST,
+        }
+
+    def send_qa_approval_notification(
+        self,
+        spec_name: str,
+        qa_status: str,
+        qa_session: int,
+        issues_count: int = 0,
+        report_path: str | None = None,
+    ) -> dict:
+        """
+        Send a QA approval/rejection notification to Slack.
+
+        Args:
+            spec_name: Name of the spec
+            qa_status: "approved" or "rejected"
+            qa_session: QA session number
+            issues_count: Number of issues found (if rejected)
+            report_path: Path to QA report (optional)
+
+        Returns:
+            Dict with message data for sending
+        """
+        if not self.is_enabled or not self.state:
+            return {}
+
+        from .config import format_qa_approval_notification
+
+        message = format_qa_approval_notification(
+            spec_name=spec_name,
+            qa_status=qa_status,
+            qa_session=qa_session,
+            issues_count=issues_count,
+            report_path=report_path,
+        )
+
+        return {
+            "channel_id": self.state.channel_id,
+            "message": message,
+            "message_type": MESSAGE_QA_APPROVAL,
         }
 
     def update_progress_message(
