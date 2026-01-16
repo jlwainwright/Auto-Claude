@@ -18,7 +18,12 @@ import {
   ChevronRight,
   RefreshCw,
   Activity,
-  AlertCircle
+  AlertCircle,
+  Bell,
+  Hash,
+  Send,
+  CheckCircle2,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -38,7 +43,7 @@ interface IntegrationSettingsProps {
 }
 
 /**
- * Integration settings for Claude accounts and API keys
+ * Integration settings for Claude accounts, API keys, and Slack notifications
  */
 export function IntegrationSettings({ settings, onSettingsChange, isOpen }: IntegrationSettingsProps) {
   const { t } = useTranslation('settings');
@@ -66,6 +71,9 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
   // Auto-swap settings state
   const [autoSwitchSettings, setAutoSwitchSettings] = useState<ClaudeAutoSwitchSettings | null>(null);
   const [isLoadingAutoSwitch, setIsLoadingAutoSwitch] = useState(false);
+
+  // Slack state
+  const [showSlackWebhookUrl, setShowSlackWebhookUrl] = useState(false);
 
   // Load Claude profiles and auto-swap settings when section is shown
   useEffect(() => {
@@ -865,6 +873,175 @@ export function IntegrationSettings({ settings, onSettingsChange, isOpen }: Inte
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Slack Integration Section */}
+        <div className="space-y-4 pt-4 border-t border-border">
+          <div className="flex items-center gap-2">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <h4 className="text-sm font-semibold text-foreground">Slack Integration</h4>
+          </div>
+
+          <div className="rounded-lg bg-muted/30 border border-border p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Enable Slack Notifications</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Receive build updates and spec approval requests in Slack
+                </p>
+              </div>
+              <Switch
+                checked={settings.slackEnabled ?? false}
+                onCheckedChange={(checked) =>
+                  onSettingsChange({ ...settings, slackEnabled: checked })
+                }
+              />
+            </div>
+
+            {settings.slackEnabled && (
+              <>
+                {/* Webhook URL */}
+                <div className="space-y-2">
+                  <Label htmlFor="slackWebhookUrl" className="text-sm font-medium text-foreground">
+                    Webhook URL
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Create a webhook from your Slack workspace settings
+                  </p>
+                  <div className="relative max-w-lg">
+                    <Input
+                      id="slackWebhookUrl"
+                      type={showSlackWebhookUrl ? 'text' : 'password'}
+                      placeholder="https://hooks.slack.com/services/T00/B00/XXX"
+                      value={settings.slackWebhookUrl || ''}
+                      onChange={(e) =>
+                        onSettingsChange({ ...settings, slackWebhookUrl: e.target.value || undefined })
+                      }
+                      className="pr-10 font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSlackWebhookUrl(!showSlackWebhookUrl)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showSlackWebhookUrl ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Navigate to{' '}
+                    <a
+                      href="https://api.slack.com/messaging/webhooks"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-info hover:underline"
+                    >
+                      Slack API docs
+                    </a>
+                    {' '}for setup instructions
+                  </p>
+                </div>
+
+                {/* Channel */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Hash className="h-4 w-4 text-muted-foreground" />
+                    <Label htmlFor="slackChannel" className="text-sm font-medium text-foreground">
+                      Channel
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground pl-6">
+                    Default channel for notifications (e.g., #builds, #dev-updates)
+                  </p>
+                  <div className="max-w-lg pl-6">
+                    <Input
+                      id="slackChannel"
+                      type="text"
+                      placeholder="#builds"
+                      value={settings.slackChannel || ''}
+                      onChange={(e) =>
+                        onSettingsChange({ ...settings, slackChannel: e.target.value || undefined })
+                      }
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Notification Preferences */}
+                <div className="space-y-4 pt-2 border-t border-border/50">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-muted-foreground" />
+                    <Label className="text-sm font-medium text-foreground">Notification Preferences</Label>
+                  </div>
+
+                  <div className="pl-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <Send className="h-4 w-4" />
+                          <Label className="font-normal text-foreground text-sm">Build Started</Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-6">Notify when a new build begins</p>
+                      </div>
+                      <Switch
+                        checked={settings.slackNotifyBuildStart ?? true}
+                        onCheckedChange={(checked) =>
+                          onSettingsChange({ ...settings, slackNotifyBuildStart: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <Label className="font-normal text-foreground text-sm">Build Completed</Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-6">Notify when a build finishes successfully</p>
+                      </div>
+                      <Switch
+                        checked={settings.slackNotifyBuildComplete ?? true}
+                        onCheckedChange={(checked) =>
+                          onSettingsChange({ ...settings, slackNotifyBuildComplete: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <Label className="font-normal text-foreground text-sm">Build Failed</Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-6">Notify when a build fails</p>
+                      </div>
+                      <Switch
+                        checked={settings.slackNotifyBuildFailed ?? true}
+                        onCheckedChange={(checked) =>
+                          onSettingsChange({ ...settings, slackNotifyBuildFailed: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="h-4 w-4" />
+                          <Label className="font-normal text-foreground text-sm">Spec Approval Requests</Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-6">Send approval requests to Slack for review</p>
+                      </div>
+                      <Switch
+                        checked={settings.slackNotifySpecApproval ?? true}
+                        onCheckedChange={(checked) =>
+                          onSettingsChange({ ...settings, slackNotifySpecApproval: checked })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

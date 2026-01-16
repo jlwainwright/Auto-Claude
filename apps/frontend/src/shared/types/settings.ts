@@ -253,6 +253,14 @@ export interface AppSettings {
   globalOpenRouterApiKey?: string;
   globalZaiApiKey?: string;
   globalZaiBaseUrl?: string;
+  // Slack Integration (app-wide build notifications)
+  slackEnabled?: boolean;
+  slackWebhookUrl?: string;
+  slackChannel?: string;
+  slackNotifyBuildStart?: boolean;
+  slackNotifyBuildComplete?: boolean;
+  slackNotifyBuildFailed?: boolean;
+  slackNotifySpecApproval?: boolean;
   // Graphiti LLM provider settings (legacy)
   graphitiLlmProvider?: 'openai' | 'anthropic' | 'google' | 'groq' | 'ollama';
   ollamaBaseUrl?: string;
