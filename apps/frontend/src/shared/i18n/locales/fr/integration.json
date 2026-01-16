@@ -1,0 +1,106 @@
+{
+  "title": "Intégration Slack",
+  "settings": {
+    "enableSlack": "Activer l'intégration Slack",
+    "enableSlackDescription": "Recevez les notifications de build et gérez les approbations depuis Slack",
+    "integrationTitle": "Intégration Slack",
+    "integrationDescription": "Connectez-vous à Slack pour le monitoring et les notifications",
+    "syncDescription": "Synchroniser avec Slack pour les notifications et approbations",
+    "webhookUrl": "URL Webhook",
+    "webhookUrlDescription": "URL webhook entrante Slack pour envoyer les notifications vers slack",
+    "webhookUrlPlaceholder": "https://hooks.slack.com/services/T00/B00/XXX",
+    "channel": "Canal par défaut",
+    "channelDescription": "Canal Slack par défaut pour les notifications dans slack (optionnel, utilise le webhook par défaut si non spécifié)",
+    "channelPlaceholder": "#general",
+    "connectionStatus": "État de la connexion",
+    "checking": "Vérification...",
+    "connected": "Connecté",
+    "notConnected": "Non connecté",
+    "testConnection": "Tester la connexion",
+    "testing": "Test en cours...",
+    "testSuccess": "Notification de test envoyée !",
+    "testFailed": "Échec de l'envoi de la notification de test"
+  },
+  "notifications": {
+    "title": "Préférences de notification",
+    "description": "Choisissez les événements à envoyer vers slack",
+    "buildStarted": "Build démarré",
+    "buildStartedDescription": "Notifier lorsqu'un nouveau build démarre dans slack",
+    "buildCompleted": "Build terminé",
+    "buildCompletedDescription": "Notifier lorsqu'un build se termine avec succès dans slack",
+    "buildFailed": "Build échoué",
+    "buildFailedDescription": "Notifier lorsqu'un build échoue dans slack",
+    "specApproval": "Approbation de spec requise",
+    "specApprovalDescription": "Envoyer les demandes d'approbation de spec vers slack",
+    "qaReview": "Revue QA terminée",
+    "qaReviewDescription": "Notifier lorsque la revue QA est terminée",
+    "allEvents": "Tous les événements",
+    "noEvents": "Aucun événement"
+  },
+  "approval": {
+    "title": "Approbation Slack",
+    "approve": "Approuver",
+    "reject": "Rejeter",
+    "approved": "Approuvé",
+    "rejected": "Rejeté",
+    "pending": "En attente",
+    "approveReaction": "Réagissez avec 👍 pour approuver",
+    "rejectReaction": "Réagissez avec 👎 pour rejeter",
+    "buildApproved": "Build approuvé via slack",
+    "buildRejected": "Build rejeté via slack",
+    "specApproved": "Spec approuvé via slack",
+    "specRejected": "Spec rejeté via slack"
+  },
+  "messages": {
+    "buildStarted": "Build démarré",
+    "buildCompleted": "Build terminé",
+    "buildFailed": "Build échoué",
+    "specApprovalRequest": "Demande d'approbation de spec",
+    "qaReviewComplete": "Revue QA terminée",
+    "viewDetails": "Voir les détails",
+    "openInApp": "Ouvrir dans l'application",
+    "project": "Projet",
+    "spec": "Spec",
+    "status": "État",
+    "duration": "Durée",
+    "startedAt": "Démarré à",
+    "completedAt": "Terminé à",
+    "failedAt": "Échoué à",
+    "reason": "Raison",
+    "waitingForApproval": "En attente de votre approbation",
+    "youApproved": "Vous avez approuvé ceci",
+    "youRejected": "Vous avez rejeté ceci"
+  },
+  "empty": {
+    "notConfigured": {
+      "title": "Slack non configuré",
+      "description": "Configurez votre webhook Slack pour commencer à recevoir des notifications.",
+      "configure": "Configurer Slack"
+    },
+    "noNotifications": "Pas encore de notifications",
+    "noPendingApprovals": "Aucune approbation en attente"
+  },
+  "errors": {
+    "webhookRequired": "L'URL webhook est requise",
+    "webhookInvalid": "Format d'URL webhook invalide",
+    "connectionFailed": "Échec de la connexion à Slack",
+    "notificationFailed": "Échec de l'envoi de la notification",
+    "approvalFailed": "Échec du traitement de l'approbation"
+  },
+  "help": {
+    "createWebhook": {
+      "title": "Créer un webhook Slack",
+      "description": "Apprenez à créer un webhook entrant dans Slack",
+      "steps": {
+        "1": "Allez sur votre espace de travail Slack",
+        "2": "Naviguez vers Apps → Incoming Webhooks",
+        "3": "Cliquez sur 'Add to Slack'",
+        "4": "Sélectionnez un canal",
+        "5": "Copiez l'URL webhook"
+      }
+    },
+    "permissions": "Autorisations Slack requises",
+    "channels": "Envoi de notifications vers les canaux",
+    "approvals": "Approbation et rejet des builds"
+  }
+}

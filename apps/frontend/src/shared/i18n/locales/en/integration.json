@@ -1,0 +1,106 @@
+{
+  "title": "Slack Integration",
+  "settings": {
+    "enableSlack": "Enable Slack Integration",
+    "enableSlackDescription": "Receive build notifications and manage approvals from Slack",
+    "integrationTitle": "Slack Integration",
+    "integrationDescription": "Connect to Slack for build monitoring and notifications",
+    "syncDescription": "Sync with Slack for notifications and approvals",
+    "webhookUrl": "Webhook URL",
+    "webhookUrlDescription": "Slack incoming webhook URL for sending notifications to slack",
+    "webhookUrlPlaceholder": "https://hooks.slack.com/services/T00/B00/XXX",
+    "channel": "Default Channel",
+    "channelDescription": "Default Slack channel for notifications in slack (optional, uses webhook default if not specified)",
+    "channelPlaceholder": "#general",
+    "connectionStatus": "Connection Status",
+    "checking": "Checking...",
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "testConnection": "Test Connection",
+    "testing": "Testing...",
+    "testSuccess": "Test notification sent!",
+    "testFailed": "Failed to send test notification"
+  },
+  "notifications": {
+    "title": "Notification Preferences",
+    "description": "Choose which events to send to slack",
+    "buildStarted": "Build Started",
+    "buildStartedDescription": "Notify when a new build starts in slack",
+    "buildCompleted": "Build Completed",
+    "buildCompletedDescription": "Notify when a build completes successfully in slack",
+    "buildFailed": "Build Failed",
+    "buildFailedDescription": "Notify when a build fails in slack",
+    "specApproval": "Spec Approval Required",
+    "specApprovalDescription": "Send spec approval requests to slack",
+    "qaReview": "QA Review Complete",
+    "qaReviewDescription": "Notify when QA review finishes",
+    "allEvents": "All Events",
+    "noEvents": "No Events"
+  },
+  "approval": {
+    "title": "Slack Approval",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "pending": "Pending",
+    "approveReaction": "React with 👍 to approve",
+    "rejectReaction": "React with 👎 to reject",
+    "buildApproved": "Build approved via slack",
+    "buildRejected": "Build rejected via slack",
+    "specApproved": "Spec approved via slack",
+    "specRejected": "Spec rejected via slack"
+  },
+  "messages": {
+    "buildStarted": "Build Started",
+    "buildCompleted": "Build Completed",
+    "buildFailed": "Build Failed",
+    "specApprovalRequest": "Spec Approval Request",
+    "qaReviewComplete": "QA Review Complete",
+    "viewDetails": "View Details",
+    "openInApp": "Open in App",
+    "project": "Project",
+    "spec": "Spec",
+    "status": "Status",
+    "duration": "Duration",
+    "startedAt": "Started at",
+    "completedAt": "Completed at",
+    "failedAt": "Failed at",
+    "reason": "Reason",
+    "waitingForApproval": "Waiting for your approval",
+    "youApproved": "You approved this",
+    "youRejected": "You rejected this"
+  },
+  "empty": {
+    "notConfigured": {
+      "title": "Slack Not Configured",
+      "description": "Configure your Slack webhook to start receiving notifications.",
+      "configure": "Configure Slack"
+    },
+    "noNotifications": "No notifications yet",
+    "noPendingApprovals": "No pending approvals"
+  },
+  "errors": {
+    "webhookRequired": "Webhook URL is required",
+    "webhookInvalid": "Invalid webhook URL format",
+    "connectionFailed": "Failed to connect to Slack",
+    "notificationFailed": "Failed to send notification",
+    "approvalFailed": "Failed to process approval"
+  },
+  "help": {
+    "createWebhook": {
+      "title": "Create Slack Webhook",
+      "description": "Learn how to create an incoming webhook in Slack",
+      "steps": {
+        "1": "Go to your Slack workspace",
+        "2": "Navigate to Apps → Incoming Webhooks",
+        "3": "Click 'Add to Slack'",
+        "4": "Select a channel",
+        "5": "Copy the webhook URL"
+      }
+    },
+    "permissions": "Required Slack permissions",
+    "channels": "Sending notifications to channels",
+    "approvals": "Approving and rejecting builds"
+  }
+}
