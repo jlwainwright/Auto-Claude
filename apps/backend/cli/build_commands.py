@@ -43,6 +43,12 @@ from workspace import (
     setup_workspace,
 )
 
+from slack_integration import (
+    slack_build_completed,
+    slack_build_failed,
+    slack_build_started,
+)
+
 from .input_handlers import (
     read_from_file,
     read_multiline_input,
@@ -236,6 +242,9 @@ def handle_build_command(
     try:
         debug("run.py", "Starting agent execution")
 
+        # Notify Slack that build has started
+        asyncio.run(slack_build_started(spec_dir, project_dir, spec_dir.name))
+
         asyncio.run(
             run_autonomous_agent(
                 project_dir=working_dir,  # Use worktree if isolated
@@ -248,6 +257,9 @@ def handle_build_command(
             )
         )
         debug_success("run.py", "Agent execution completed")
+
+        # Notify Slack that build completed successfully
+        asyncio.run(slack_build_completed(spec_dir, project_dir, spec_dir.name))
 
         # Run QA validation BEFORE finalization (while worktree still exists)
         # QA must sign off before the build is considered complete
@@ -323,6 +335,9 @@ def handle_build_command(
             verbose=verbose,
         )
     except Exception as e:
+        # Notify Slack that build failed
+        asyncio.run(slack_build_failed(spec_dir, project_dir, spec_dir.name, str(e)))
+
         print(f"\nFatal error: {e}")
         if verbose:
             import traceback

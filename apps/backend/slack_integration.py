@@ -27,6 +27,13 @@ from integrations.slack.integration import (
     prepare_planner_slack_instructions,
 )
 
+from integrations.slack.updater import (
+    send_spec_approval_request,
+    slack_build_completed,
+    slack_build_failed,
+    slack_build_started,
+)
+
 __all__ = [
     # Config exports
     "NotificationPreferences",
@@ -46,4 +53,9 @@ __all__ = [
     "is_slack_enabled",
     "prepare_coder_slack_instructions",
     "prepare_planner_slack_instructions",
+    # Updater exports
+    "send_spec_approval_request",
+    "slack_build_completed",
+    "slack_build_failed",
+    "slack_build_started",
 ]
