@@ -21,6 +21,7 @@ from .models import (
     GRAPHITI_MCP_TOOLS,
     LINEAR_TOOLS,
     PUPPETEER_TOOLS,
+    SLACK_TOOLS,
     get_agent_config,
     get_required_mcp_servers,
 )
@@ -31,6 +32,7 @@ def get_allowed_tools(
     agent_type: str,
     project_capabilities: dict | None = None,
     linear_enabled: bool = False,
+    slack_enabled: bool = False,
     mcp_config: dict | None = None,
 ) -> list[str]:
     """
@@ -47,6 +49,7 @@ def get_allowed_tools(
         project_capabilities: Optional dict from detect_project_capabilities()
                             containing flags like is_electron, is_web_frontend, etc.
         linear_enabled: Whether Linear integration is enabled for this project
+        slack_enabled: Whether Slack integration is enabled for this project
         mcp_config: Per-project MCP server toggles from .auto-claude/.env
 
     Returns:
@@ -66,6 +69,7 @@ def get_allowed_tools(
         agent_type,
         project_capabilities,
         linear_enabled,
+        slack_enabled,
         mcp_config,
     )
 
@@ -105,6 +109,8 @@ def _get_mcp_tools_for_servers(servers: list[str]) -> list[str]:
             tools.extend(ELECTRON_TOOLS)
         elif server == "puppeteer":
             tools.extend(PUPPETEER_TOOLS)
+        elif server == "slack":
+            tools.extend(SLACK_TOOLS)
         # auto-claude tools are already added via config["auto_claude_tools"]
 
     return tools

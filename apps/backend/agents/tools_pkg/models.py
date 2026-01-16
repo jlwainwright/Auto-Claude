@@ -69,6 +69,13 @@ LINEAR_TOOLS = [
     "mcp__linear-server__get_user",
 ]
 
+# Slack MCP tools for build notifications and control (when SLACK_BOT_TOKEN is set)
+SLACK_TOOLS = [
+    "mcp__slack-server__list_channels",  # List available channels
+    "mcp__slack-server__send_message",  # Send notifications to a channel
+    "mcp__slack-server__update_message",  # Update existing messages
+]
+
 # Graphiti MCP tools for knowledge graph memory (when GRAPHITI_MCP_URL is set)
 # See: https://github.com/getzep/graphiti
 GRAPHITI_MCP_TOOLS = [
@@ -191,7 +198,7 @@ AGENT_CONFIGS = {
     "planner": {
         "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
         "mcp_servers": ["context7", "graphiti", "auto-claude"],
-        "mcp_servers_optional": ["linear"],  # Only if project setting enabled
+        "mcp_servers_optional": ["linear", "slack"],  # Only if project setting enabled
         "auto_claude_tools": [
             TOOL_GET_BUILD_PROGRESS,
             TOOL_GET_SESSION_CONTEXT,
@@ -202,7 +209,7 @@ AGENT_CONFIGS = {
     "coder": {
         "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
         "mcp_servers": ["context7", "graphiti", "auto-claude"],
-        "mcp_servers_optional": ["linear"],
+        "mcp_servers_optional": ["linear", "slack"],
         "auto_claude_tools": [
             TOOL_UPDATE_SUBTASK_STATUS,
             TOOL_GET_BUILD_PROGRESS,
@@ -220,7 +227,7 @@ AGENT_CONFIGS = {
         # Note: Reviewer writes to spec directory only (qa_report.md, implementation_plan.json)
         "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
         "mcp_servers": ["context7", "graphiti", "auto-claude", "browser"],
-        "mcp_servers_optional": ["linear"],  # For updating issue status
+        "mcp_servers_optional": ["linear", "slack"],  # For updating issue status and notifications
         "auto_claude_tools": [
             TOOL_GET_BUILD_PROGRESS,
             TOOL_UPDATE_QA_STATUS,
@@ -231,7 +238,7 @@ AGENT_CONFIGS = {
     "qa_fixer": {
         "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
         "mcp_servers": ["context7", "graphiti", "auto-claude", "browser"],
-        "mcp_servers_optional": ["linear"],
+        "mcp_servers_optional": ["linear", "slack"],
         "auto_claude_tools": [
             TOOL_UPDATE_SUBTASK_STATUS,
             TOOL_GET_BUILD_PROGRESS,
@@ -372,6 +379,7 @@ def _map_mcp_server_name(
         "graphiti-memory": "graphiti",
         "graphiti": "graphiti",
         "linear": "linear",
+        "slack": "slack",
         "electron": "electron",
         "puppeteer": "puppeteer",
         "auto-claude": "auto-claude",
@@ -390,6 +398,7 @@ def get_required_mcp_servers(
     agent_type: str,
     project_capabilities: dict | None = None,
     linear_enabled: bool = False,
+    slack_enabled: bool = False,
     mcp_config: dict | None = None,
 ) -> list[str]:
     """
@@ -398,6 +407,7 @@ def get_required_mcp_servers(
     Handles dynamic server selection:
     - "browser" → electron (if is_electron) or puppeteer (if is_web_frontend)
     - "linear" → only if in mcp_servers_optional AND linear_enabled is True
+    - "slack" → only if in mcp_servers_optional AND slack_enabled is True
     - "graphiti" → only if GRAPHITI_MCP_URL is set
     - Respects per-project MCP config overrides from .auto-claude/.env
     - Applies per-agent ADD/REMOVE overrides from AGENT_MCP_<agent>_ADD/REMOVE
@@ -406,9 +416,10 @@ def get_required_mcp_servers(
         agent_type: The agent type identifier
         project_capabilities: Dict from detect_project_capabilities() or None
         linear_enabled: Whether Linear integration is enabled for this project
+        slack_enabled: Whether Slack integration is enabled for this project
         mcp_config: Per-project MCP server toggles from .auto-claude/.env
                    Keys: CONTEXT7_ENABLED, LINEAR_MCP_ENABLED, ELECTRON_MCP_ENABLED,
-                         PUPPETEER_MCP_ENABLED, AGENT_MCP_<agent>_ADD/REMOVE
+                         PUPPETEER_MCP_ENABLED, SLACK_MCP_ENABLED, AGENT_MCP_<agent>_ADD/REMOVE
 
     Returns:
         List of MCP server names to start
@@ -433,6 +444,12 @@ def get_required_mcp_servers(
         linear_mcp_enabled = mcp_config.get("LINEAR_MCP_ENABLED", "true")
         if str(linear_mcp_enabled).lower() != "false":
             servers.append("linear")
+
+    if "slack" in optional and slack_enabled:
+        # Also check per-project SLACK_MCP_ENABLED override
+        slack_mcp_enabled = mcp_config.get("SLACK_MCP_ENABLED", "true")
+        if str(slack_mcp_enabled).lower() != "false":
+            servers.append("slack")
 
     # Handle dynamic "browser" → electron/puppeteer based on project type and config
     if "browser" in servers:

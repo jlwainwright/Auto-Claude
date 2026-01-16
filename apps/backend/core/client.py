@@ -127,6 +127,7 @@ from agents.tools_pkg import (
     GRAPHITI_MCP_TOOLS,
     LINEAR_TOOLS,
     PUPPETEER_TOOLS,
+    SLACK_TOOLS,
     create_auto_claude_mcp_server,
     get_allowed_tools,
     get_required_mcp_servers,
@@ -148,6 +149,7 @@ from prompts_pkg.project_context import detect_project_capabilities, load_projec
 from providers.openai_compat import OpenAICompatClient
 from security import bash_security_hook
 from security.output_validation import output_validation_hook
+from slack_integration import is_slack_enabled
 
 
 def _map_zhipuai_model(model: str) -> str:
@@ -356,6 +358,7 @@ def load_project_mcp_config(project_dir: Path) -> dict:
     - LINEAR_MCP_ENABLED (default: true)
     - ELECTRON_MCP_ENABLED (default: false)
     - PUPPETEER_MCP_ENABLED (default: false)
+    - SLACK_MCP_ENABLED (default: true)
     - AGENT_MCP_<agent>_ADD (per-agent MCP additions)
     - AGENT_MCP_<agent>_REMOVE (per-agent MCP removals)
     - CUSTOM_MCP_SERVERS (JSON array of custom server configs)
@@ -376,6 +379,7 @@ def load_project_mcp_config(project_dir: Path) -> dict:
         "LINEAR_MCP_ENABLED",
         "ELECTRON_MCP_ENABLED",
         "PUPPETEER_MCP_ENABLED",
+        "SLACK_MCP_ENABLED",
     }
 
     try:
@@ -564,6 +568,10 @@ def create_client(
     linear_enabled = is_linear_enabled()
     linear_api_key = os.environ.get("LINEAR_API_KEY", "")
 
+    # Check if Slack integration is enabled
+    slack_enabled = is_slack_enabled()
+    slack_bot_token = os.environ.get("SLACK_BOT_TOKEN", "")
+
     # Check if custom auto-claude tools are available
     auto_claude_tools_enabled = is_tools_available()
 
@@ -582,6 +590,7 @@ def create_client(
         agent_type,
         project_capabilities,
         linear_enabled,
+        slack_enabled,
         mcp_config,
     )
 
@@ -592,6 +601,7 @@ def create_client(
         agent_type,
         project_capabilities,
         linear_enabled,
+        slack_enabled,
         mcp_config,
     )
 
@@ -696,6 +706,11 @@ def create_client(
                     else []
                 ),
                 *(
+                    [f"{tool}(*)" for tool in SLACK_TOOLS]
+                    if "slack" in required_servers
+                    else []
+                ),
+                *(
                     [f"{tool}(*)" for tool in GRAPHITI_MCP_TOOLS]
                     if graphiti_mcp_enabled
                     else []
@@ -733,6 +748,8 @@ def create_client(
         mcp_servers_list.append("puppeteer (browser automation)")
     if "linear" in required_servers:
         mcp_servers_list.append("linear (project management)")
+    if "slack" in required_servers:
+        mcp_servers_list.append("slack (build notifications)")
     if graphiti_mcp_enabled:
         mcp_servers_list.append("graphiti-memory (knowledge graph)")
     if "auto-claude" in required_servers and auto_claude_tools_enabled:
@@ -782,6 +799,13 @@ def create_client(
             "type": "http",
             "url": "https://mcp.linear.app/mcp",
             "headers": {"Authorization": f"Bearer {linear_api_key}"},
+        }
+
+    if "slack" in required_servers:
+        mcp_servers["slack"] = {
+            "type": "http",
+            "url": "https://slack-mcp-server.example.com/mcp",  # TODO: Update with actual Slack MCP server URL
+            "headers": {"Authorization": f"Bearer {slack_bot_token}"},
         }
 
     # Graphiti MCP server for knowledge graph memory
