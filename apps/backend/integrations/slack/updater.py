@@ -508,3 +508,72 @@ async def slack_progress_update(
     except Exception as e:
         print(f"Failed to update progress in Slack: {e}")
         return False
+
+
+async def send_spec_approval_request(
+    spec_dir: Path,
+    project_dir: Path,
+    spec_name: str,
+    spec_id: str,
+    description: str,
+    requirements: list[str] | None = None,
+) -> bool:
+    """
+    Send a spec approval request to Slack.
+
+    Called when a spec is created and requires user approval before building.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        spec_name: Name of the spec
+        spec_id: Spec ID (e.g., "001-feature")
+        description: Spec description
+        requirements: List of key requirements (optional)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not is_slack_enabled():
+        return False
+
+    try:
+        manager = SlackManager(spec_dir, project_dir)
+
+        if not manager.is_initialized:
+            print(f"Slack not initialized for {spec_name}, skipping approval request")
+            return False
+
+        # Check if spec approval notifications are enabled
+        preferences = manager.get_notification_preferences()
+        if not preferences.get("notify_spec_approval", True):
+            return False
+
+        # Prepare message data
+        message_data = manager.send_spec_approval_request(
+            spec_name=spec_name,
+            spec_id=spec_id,
+            description=description,
+            requirements=requirements,
+        )
+
+        if not message_data:
+            return False
+
+        channel_id = message_data["channel_id"]
+        message = message_data["message"]
+
+        # Send message via MCP
+        message_ts = await _send_message_to_slack(channel_id, message)
+        if message_ts:
+            # Store the approval timestamp for tracking responses
+            manager.set_approval_timestamp(message_ts)
+            manager.increment_message_count()
+            print(f"Spec approval request sent to Slack: {message_ts}")
+            return True
+
+        return False
+
+    except Exception as e:
+        print(f"Failed to send spec approval request: {e}")
+        return False
