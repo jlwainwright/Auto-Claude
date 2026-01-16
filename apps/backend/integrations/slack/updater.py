@@ -230,6 +230,12 @@ async def slack_build_started(
             print(f"Slack not initialized for {spec_name}, skipping build start notification")
             return False
 
+        # Check if build start notifications are enabled
+        preferences = manager.get_notification_preferences()
+        if not preferences.get("notify_build_start", True):
+            print(f"Build start notifications disabled, skipping")
+            return False
+
         # Prepare message data
         message_data = manager.send_build_start_notification(
             spec_name=spec_name,
@@ -288,6 +294,12 @@ async def slack_build_completed(
         if not manager.is_initialized:
             return False
 
+        # Check if build completion notifications are enabled
+        preferences = manager.get_notification_preferences()
+        if not preferences.get("notify_build_complete", True):
+            print(f"Build completion notifications disabled, skipping")
+            return False
+
         # Prepare message data
         message_data = manager.send_build_complete_notification(
             spec_name=spec_name,
@@ -342,6 +354,12 @@ async def slack_build_failed(
         manager = SlackManager(spec_dir, project_dir)
 
         if not manager.is_initialized:
+            return False
+
+        # Check if build failure notifications are enabled
+        preferences = manager.get_notification_preferences()
+        if not preferences.get("notify_build_fail", True):
+            print(f"Build failure notifications disabled, skipping")
             return False
 
         # Prepare message data
