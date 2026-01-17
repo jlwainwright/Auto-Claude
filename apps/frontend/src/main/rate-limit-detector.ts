@@ -3,6 +3,7 @@
  * Detects rate limit errors in stdout/stderr output and provides context.
  */
 
+import * as fs from 'fs';
 import { getClaudeProfileManager } from './claude-profile-manager';
 
 /**
@@ -254,6 +255,29 @@ export function getProfileEnv(profileId?: string): Record<string, string> {
     ? profileManager.getProfile(profileId)
     : profileManager.getActiveProfile();
 
+  // #region agent log
+  try {
+    const logPath = '/Users/jacques/DevFolder/Auto-Claude/.cursor/debug.log';
+    const logEntry = {
+      id: `log_${Date.now()}_getProfileEnv_start`,
+      timestamp: Date.now(),
+      location: 'rate-limit-detector.ts:getProfileEnv',
+      message: 'getProfileEnv called',
+      data: {
+        requestedProfileId: profileId,
+        foundProfileId: profile?.id,
+        profileName: profile?.name,
+        hasOAuthToken: !!profile?.oauthToken,
+        hasConfigDir: !!profile?.configDir,
+        isDefault: profile?.isDefault
+      },
+      sessionId: 'debug-session',
+      hypothesisId: 'B'
+    };
+    fs.appendFileSync(logPath, JSON.stringify(logEntry) + '\n');
+  } catch {}
+  // #endregion
+
   console.warn('[getProfileEnv] Active profile:', {
     profileId: profile?.id,
     profileName: profile?.name,
@@ -276,6 +300,21 @@ export function getProfileEnv(profileId?: string): Record<string, string> {
       : profileManager.getActiveProfileToken();
 
     if (decryptedToken) {
+      // #region agent log
+      try {
+        const logPath = '/Users/jacques/DevFolder/Auto-Claude/.cursor/debug.log';
+        const logEntry = {
+          id: `log_${Date.now()}_getProfileEnv_return_token`,
+          timestamp: Date.now(),
+          location: 'rate-limit-detector.ts:getProfileEnv',
+          message: 'Returning OAuth token from profile',
+          data: { profileName: profile.name, tokenPrefix: decryptedToken.substring(0, 20) + '...' },
+          sessionId: 'debug-session',
+          hypothesisId: 'B'
+        };
+        fs.appendFileSync(logPath, JSON.stringify(logEntry) + '\n');
+      } catch {}
+      // #endregion
       console.warn('[getProfileEnv] Using OAuth token for profile:', profile.name);
       return {
         CLAUDE_CODE_OAUTH_TOKEN: decryptedToken
