@@ -693,24 +693,7 @@ export class MemoryService {
       this.config.database,
     ]);
 
-    if (!edgesResult.success || !edgesResult.data) {
-      console.error('Failed to get graph edges:', edgesResult.error);
-      return { nodes: [], edges: [], nodeCount: 0, edgeCount: 0 };
-    }
-
-    const edgesData = edgesResult.data as MemoryGraphQueryResult['data'];
-    if (!edgesData) {
-      return { nodes: [], edges: [], nodeCount: 0, edgeCount: 0 };
-    }
-
-    // Collect all unique node IDs from edges
-    const nodeIds = new Set<string>();
-    edgesData.edges.forEach((edge) => {
-      nodeIds.add(edge.source);
-      nodeIds.add(edge.target);
-    });
-
-    // Fetch all memories to build node data
+    // Fetch all memories to build node data (do this in parallel with edges)
     const [episodes, entities] = await Promise.all([
       this.getEpisodicMemories(1000), // Get all episodes
       this.getEntityMemories(1000),   // Get all entities
@@ -719,44 +702,46 @@ export class MemoryService {
     // Create a map of node ID to node data
     const nodeMap = new Map<string, MemoryGraphNode>();
 
-    // Add episodes to node map
+    // Add all episodes to node map (not just connected ones)
     episodes.forEach((episode) => {
-      if (nodeIds.has(episode.id)) {
-        nodeMap.set(episode.id, {
-          id: episode.id,
-          label: this.extractLabel(episode.content),
-          type: episode.type,
-          timestamp: episode.timestamp,
-          content: episode.content,
-          session_number: episode.session_number,
-          size: this.getNodeSize(episode.type),
-        });
-      }
+      nodeMap.set(episode.id, {
+        id: episode.id,
+        label: this.extractLabel(episode.content),
+        type: episode.type,
+        timestamp: episode.timestamp,
+        content: episode.content,
+        session_number: episode.session_number,
+        size: this.getNodeSize(episode.type),
+      });
     });
 
-    // Add entities to node map
+    // Add all entities to node map (not just connected ones)
     entities.forEach((entity) => {
-      if (nodeIds.has(entity.id)) {
-        nodeMap.set(entity.id, {
-          id: entity.id,
-          label: this.extractLabel(entity.content),
-          type: entity.type,
-          timestamp: entity.timestamp,
-          content: entity.content,
-          size: this.getNodeSize(entity.type),
-        });
-      }
+      nodeMap.set(entity.id, {
+        id: entity.id,
+        label: this.extractLabel(entity.content),
+        type: entity.type,
+        timestamp: entity.timestamp,
+        content: entity.content,
+        size: this.getNodeSize(entity.type),
+      });
     });
 
-    // Convert edges to the expected format
-    const graphEdges: MemoryGraphEdge[] = edgesData.edges.map((edge) => ({
-      source: edge.source,
-      target: edge.target,
-      relationship_type: edge.relationship_type,
-      source_name: edge.source_name,
-      target_name: edge.target_name,
-      label: this.formatEdgeLabel(edge.relationship_type),
-    }));
+    // Process edges if the query succeeded
+    let graphEdges: MemoryGraphEdge[] = [];
+    if (edgesResult.success && edgesResult.data) {
+      const edgesData = edgesResult.data as MemoryGraphQueryResult['data'];
+      if (edgesData) {
+        graphEdges = edgesData.edges.map((edge) => ({
+          source: edge.source,
+          target: edge.target,
+          relationship_type: edge.relationship_type,
+          source_name: edge.source_name,
+          target_name: edge.target_name,
+          label: this.formatEdgeLabel(edge.relationship_type),
+        }));
+      }
+    }
 
     // Convert node map to array
     const nodes = Array.from(nodeMap.values());
