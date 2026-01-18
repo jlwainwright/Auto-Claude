@@ -21,8 +21,15 @@ from cli.utils import import_dotenv
 load_dotenv = import_dotenv()
 
 env_file = Path(__file__).parent.parent / ".env"
+print(f"[DEBUG] insights_runner: Looking for .env at {env_file}")
 if env_file.exists():
+    print(f"[DEBUG] insights_runner: Loading .env from {env_file}")
     load_dotenv(env_file)
+    import os
+    print(f"[DEBUG] insights_runner: ZAI_API_KEY set = {'ZAI_API_KEY' in os.environ}")
+    print(f"[DEBUG] insights_runner: ANTHROPIC_BASE_URL = {os.environ.get('ANTHROPIC_BASE_URL')}")
+else:
+    print(f"[DEBUG] insights_runner: .env file not found at {env_file}")
 
 try:
     from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
@@ -136,10 +143,11 @@ async def run_with_sdk(
     message: str,
     history: list,
     model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
+    provider: str = "claude",  # Provider (claude or zai)
     thinking_level: str = "medium",
 ) -> None:
     """Run the chat using the configured provider client with streaming-like output."""
-    is_glm = (model or "").strip().lower().startswith("glm-")
+    is_glm = (model or "").strip().lower().startswith("glm-") or provider == "zai"
 
     if not is_glm:
         if not SDK_AVAILABLE:
@@ -147,7 +155,7 @@ async def run_with_sdk(
                 "Claude SDK not available, falling back to simple mode",
                 file=sys.stderr,
             )
-            run_simple(project_dir, message, history)
+            run_simple(project_dir, message, history, provider)
             return
 
         if not get_auth_token():
@@ -155,7 +163,7 @@ async def run_with_sdk(
                 "No authentication token found, falling back to simple mode",
                 file=sys.stderr,
             )
-            run_simple(project_dir, message, history)
+            run_simple(project_dir, message, history, provider)
             return
 
         # Ensure SDK can find the token
@@ -182,8 +190,10 @@ Current question: {message}"""
         "insights_runner",
         "Using model configuration",
         model=model,
+        provider=provider,
         thinking_level=thinking_level,
     )
+    print(f"[DEBUG] insights_runner: model={model}, provider={provider}, thinking_level={thinking_level}")
 
     try:
         # Use the shared client factory so glm-* models route to Z.AI instead of Claude.
@@ -192,6 +202,7 @@ Current question: {message}"""
         client = create_simple_client(
             agent_type="insights",
             model=model,
+            provider=provider,
             system_prompt=system_prompt,
             cwd=project_path,
             max_turns=30,
@@ -290,7 +301,7 @@ Current question: {message}"""
         run_simple(project_dir, message, history)
 
 
-def run_simple(project_dir: str, message: str, history: list) -> None:
+def run_simple(project_dir: str, message: str, history: list, provider: str = "claude") -> None:
     """Simple fallback mode without SDK - uses subprocess to call claude CLI."""
     import subprocess
 
@@ -358,6 +369,12 @@ def main():
         help="Model to use (haiku, sonnet, opus, or full model ID)",
     )
     parser.add_argument(
+        "--provider",
+        default="claude",
+        choices=["claude", "zai"],
+        help="Provider to use (claude or zai) (default: claude)",
+    )
+    parser.add_argument(
         "--thinking-level",
         default="medium",
         choices=["none", "low", "medium", "high", "ultrathink"],
@@ -370,6 +387,7 @@ def main():
     project_dir = args.project_dir
     user_message = args.message
     model = args.model
+    provider = args.provider
     thinking_level = args.thinking_level
 
     debug(
@@ -378,6 +396,7 @@ def main():
         project_dir=project_dir,
         message_length=len(user_message),
         model=model,
+        provider=provider,
         thinking_level=thinking_level,
     )
 
@@ -405,7 +424,7 @@ def main():
 
     # Run the async SDK function
     debug("insights_runner", "Running SDK query")
-    asyncio.run(run_with_sdk(project_dir, user_message, history, model, thinking_level))
+    asyncio.run(run_with_sdk(project_dir, user_message, history, model, provider, thinking_level))
     debug_success("insights_runner", "Query completed")
 
 

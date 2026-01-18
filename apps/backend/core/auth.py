@@ -66,6 +66,12 @@ def get_token_from_keychain() -> str | None:
 
 def _get_token_from_macos_keychain() -> str | None:
     """Get token from macOS Keychain."""
+    # #region agent log
+    import json
+    import time
+    log_path = "/Users/jacques/DevFolder/Auto-Claude/.cursor/debug.log"
+    # #endregion
+
     try:
         result = subprocess.run(
             [
@@ -81,25 +87,127 @@ def _get_token_from_macos_keychain() -> str | None:
         )
 
         if result.returncode != 0:
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    log_entry = {
+                        "id": f"log_{int(time.time()*1000)}_keychain_error",
+                        "timestamp": int(time.time() * 1000),
+                        "location": "auth.py:_get_token_from_macos_keychain",
+                        "message": "Keychain lookup failed (non-zero return code)",
+                        "data": {"returncode": result.returncode},
+                        "sessionId": "debug-session",
+                        "hypothesisId": "A"
+                    }
+                    f.write(json.dumps(log_entry) + "\n")
+            except:
+                pass
+            # #endregion
+
             return None
 
         credentials_json = result.stdout.strip()
         if not credentials_json:
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    log_entry = {
+                        "id": f"log_{int(time.time()*1000)}_keychain_empty",
+                        "timestamp": int(time.time() * 1000),
+                        "location": "auth.py:_get_token_from_macos_keychain",
+                        "message": "Keychain returned empty string",
+                        "data": {},
+                        "sessionId": "debug-session",
+                        "hypothesisId": "A"
+                    }
+                    f.write(json.dumps(log_entry) + "\n")
+            except:
+                pass
+            # #endregion
+
             return None
 
         data = json.loads(credentials_json)
         token = data.get("claudeAiOauth", {}).get("accessToken")
 
         if not token:
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    log_entry = {
+                        "id": f"log_{int(time.time()*1000)}_keychain_no_token",
+                        "timestamp": int(time.time() * 1000),
+                        "location": "auth.py:_get_token_from_macos_keychain",
+                        "message": "Keychain has no accessToken field",
+                        "data": {"has_claudeAiOauth": "claudeAiOauth" in data},
+                        "sessionId": "debug-session",
+                        "hypothesisId": "A"
+                    }
+                    f.write(json.dumps(log_entry) + "\n")
+            except:
+                pass
+            # #endregion
+
             return None
 
         # Validate token format (Claude OAuth tokens start with sk-ant-oat01-)
         if not token.startswith("sk-ant-oat01-"):
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    log_entry = {
+                        "id": f"log_{int(time.time()*1000)}_keychain_invalid_format",
+                        "timestamp": int(time.time() * 1000),
+                        "location": "auth.py:_get_token_from_macos_keychain",
+                        "message": "Keychain token has invalid format",
+                        "data": {"token_prefix": token[:30] + "..."},
+                        "sessionId": "debug-session",
+                        "hypothesisId": "A"
+                    }
+                    f.write(json.dumps(log_entry) + "\n")
+            except:
+                pass
+            # #endregion
+
             return None
+
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                log_entry = {
+                    "id": f"log_{int(time.time()*1000)}_keychain_success",
+                    "timestamp": int(time.time() * 1000),
+                    "location": "auth.py:_get_token_from_macos_keychain",
+                    "message": "Successfully retrieved token from keychain",
+                    "data": {"token_prefix": token[:20] + "..."},
+                    "sessionId": "debug-session",
+                    "hypothesisId": "A"
+                }
+                f.write(json.dumps(log_entry) + "\n")
+        except:
+            pass
+        # #endregion
 
         return token
 
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, Exception):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, Exception) as e:
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                log_entry = {
+                    "id": f"log_{int(time.time()*1000)}_keychain_exception",
+                    "timestamp": int(time.time() * 1000),
+                    "location": "auth.py:_get_token_from_macos_keychain",
+                    "message": "Exception in keychain lookup",
+                    "data": {"exception_type": type(e).__name__},
+                    "sessionId": "debug-session",
+                    "hypothesisId": "A"
+                }
+                f.write(json.dumps(log_entry) + "\n")
+        except:
+            pass
+        # #endregion
+
         return None
 
 
@@ -146,6 +254,30 @@ def get_auth_token() -> str | None:
     Returns:
         Token string if found, None otherwise
     """
+    # #region agent log
+    import json
+    import time
+    log_path = "/Users/jacques/DevFolder/Auto-Claude/.cursor/debug.log"
+    try:
+        with open(log_path, "a") as f:
+            log_entry = {
+                "id": f"log_{int(time.time()*1000)}_auth_get",
+                "timestamp": int(time.time() * 1000),
+                "location": "auth.py:get_auth_token",
+                "message": "Checking auth token sources",
+                "data": {
+                    "env_CLAUDE_CODE_OAUTH_TOKEN": os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")[:50] + "..." if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") else None,
+                    "env_ANTHROPIC_AUTH_TOKEN": os.environ.get("ANTHROPIC_AUTH_TOKEN", "")[:50] + "..." if os.environ.get("ANTHROPIC_AUTH_TOKEN") else None,
+                    "system": platform.system()
+                },
+                "sessionId": "debug-session",
+                "hypothesisId": "A"
+            }
+            f.write(json.dumps(log_entry) + "\n")
+    except:
+        pass
+    # #endregion
+
     # First check environment variables
     for var in AUTH_TOKEN_ENV_VARS:
         token = os.environ.get(var)
@@ -159,9 +291,50 @@ def get_auth_token() -> str | None:
         if not token or token.startswith("enc:"):
             continue
 
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                log_entry = {
+                    "id": f"log_{int(time.time()*1000)}_auth_found",
+                    "timestamp": int(time.time() * 1000),
+                    "location": "auth.py:get_auth_token",
+                    "message": f"Token found in env var: {var}",
+                    "data": {
+                        "source": var,
+                        "token_prefix": token[:20] + "..." if token else None
+                    },
+                    "sessionId": "debug-session",
+                    "hypothesisId": "A"
+                }
+                f.write(json.dumps(log_entry) + "\n")
+        except:
+            pass
+        # #endregion
+
         return token
 
     # Fallback to system credential store
+    # #region agent log
+    try:
+        keychain_token = get_token_from_keychain()
+        with open(log_path, "a") as f:
+            log_entry = {
+                "id": f"log_{int(time.time()*1000)}_auth_keychain",
+                "timestamp": int(time.time() * 1000),
+                "location": "auth.py:get_auth_token",
+                "message": "Falling back to keychain",
+                "data": {
+                    "has_token": keychain_token is not None,
+                    "token_prefix": keychain_token[:20] + "..." if keychain_token else None
+                },
+                "sessionId": "debug-session",
+                "hypothesisId": "A"
+            }
+            f.write(json.dumps(log_entry) + "\n")
+    except:
+        pass
+    # #endregion
+
     return get_token_from_keychain()
 
 
@@ -347,10 +520,72 @@ def ensure_claude_code_oauth_token() -> None:
     If not set but other auth tokens are available, copies the value
     to CLAUDE_CODE_OAUTH_TOKEN so the underlying SDK can use it.
     """
+    # #region agent log
+    import json
+    import time
+    log_path = "/Users/jacques/DevFolder/Auto-Claude/.cursor/debug.log"
+    try:
+        existing_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+        with open(log_path, "a") as f:
+            log_entry = {
+                "id": f"log_{int(time.time()*1000)}_ensure_start",
+                "timestamp": int(time.time() * 1000),
+                "location": "auth.py:ensure_claude_code_oauth_token",
+                "message": "Checking existing CLAUDE_CODE_OAUTH_TOKEN",
+                "data": {
+                    "existing_token_prefix": existing_token[:20] + "..." if existing_token else None,
+                    "existing_token_length": len(existing_token) if existing_token else 0
+                },
+                "sessionId": "debug-session",
+                "hypothesisId": "B"
+            }
+            f.write(json.dumps(log_entry) + "\n")
+    except:
+        pass
+    # #endregion
+
     existing = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
     if existing and existing.strip() and not existing.strip().startswith("enc:"):
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                log_entry = {
+                    "id": f"log_{int(time.time()*1000)}_ensure_skip",
+                    "timestamp": int(time.time() * 1000),
+                    "location": "auth.py:ensure_claude_code_oauth_token",
+                    "message": "Skipping - valid existing token already set",
+                    "data": {
+                        "existing_token_prefix": existing[:20] + "...",
+                        "existing_token_length": len(existing)
+                    },
+                    "sessionId": "debug-session",
+                    "hypothesisId": "B"
+                }
+                f.write(json.dumps(log_entry) + "\n")
+        except:
+            pass
+        # #endregion
         return
 
     token = get_auth_token()
     if token:
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                log_entry = {
+                    "id": f"log_{int(time.time()*1000)}_ensure_set",
+                    "timestamp": int(time.time() * 1000),
+                    "location": "auth.py:ensure_claude_code_oauth_token",
+                    "message": "Setting CLAUDE_CODE_OAUTH_TOKEN from get_auth_token()",
+                    "data": {
+                        "token_prefix": token[:20] + "...",
+                        "token_length": len(token)
+                    },
+                    "sessionId": "debug-session",
+                    "hypothesisId": "B"
+                }
+                f.write(json.dumps(log_entry) + "\n")
+        except:
+            pass
+        # #endregion
         os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = token

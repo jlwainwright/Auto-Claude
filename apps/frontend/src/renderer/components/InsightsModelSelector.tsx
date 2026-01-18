@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel
 } from './ui/dropdown-menu';
-import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS } from '../../shared/constants';
+import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS, AVAILABLE_PROVIDERS, AVAILABLE_ZAI_MODELS } from '../../shared/constants';
 import type { InsightsModelConfig } from '../../shared/types';
 import { CustomModelModal } from './CustomModelModal';
 import { useSettingsStore } from '../stores/settings-store';
@@ -74,7 +74,10 @@ export function InsightsModelSelector({
   // Build display text for current selection
   const getDisplayText = () => {
     if (selectedProfileId === 'custom' && currentConfig) {
-      const modelLabel = AVAILABLE_MODELS.find(m => m.value === currentConfig.model)?.label || currentConfig.model;
+      const provider = currentConfig.provider || 'claude';
+      const providerLabel = AVAILABLE_PROVIDERS.find(p => p.value === provider)?.label || provider.toUpperCase();
+      const models = provider === 'zai' ? AVAILABLE_ZAI_MODELS : AVAILABLE_MODELS;
+      const modelLabel = models.find(m => m.value === currentConfig.model)?.label || currentConfig.model;
       return `${modelLabel} + ${currentConfig.thinkingLevel}`;
     }
     return profile?.name || 'Balanced';

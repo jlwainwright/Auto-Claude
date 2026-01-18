@@ -112,9 +112,15 @@ export class InsightsExecutor extends EventEmitter {
 
     // Add model config if provided
     if (modelConfig) {
-      const modelId = MODEL_ID_MAP[modelConfig.model] || MODEL_ID_MAP['sonnet'];
+      // For Claude models (haiku, sonnet, opus), use MODEL_ID_MAP to get full model ID
+      // For GLM models (glm-4.7, glm-4.5-air), pass through directly
+      const isGlmModel = modelConfig.model.startsWith('glm-');
+      const modelId = isGlmModel ? modelConfig.model : (MODEL_ID_MAP[modelConfig.model] || MODEL_ID_MAP['sonnet']);
+      // GLM models must use the Z.AI provider; avoid sending glm-* to Claude.
+      const provider = isGlmModel ? 'zai' : (modelConfig.provider || 'claude');
       args.push('--model', modelId);
       args.push('--thinking-level', modelConfig.thinkingLevel);
+      args.push('--provider', provider);
     }
 
     // Spawn Python process

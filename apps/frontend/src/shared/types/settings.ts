@@ -161,7 +161,7 @@ export interface ColorThemeDefinition {
 export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'ultrathink';
 
 // Model type shorthand
-export type ModelTypeShort = 'haiku' | 'sonnet' | 'opus';
+export type ModelTypeShort = 'haiku' | 'sonnet' | 'opus' | 'glm-4.7' | 'glm-4.5-air';
 
 // Provider identifiers
 export type ProviderId = 'claude' | 'zai';

@@ -162,7 +162,8 @@ import type { ModelType } from './task';
 // Model configuration for insights sessions
 export interface InsightsModelConfig {
   profileId: string;           // 'complex' | 'balanced' | 'quick' | 'custom'
-  model: ModelType;            // 'haiku' | 'sonnet' | 'opus'
+  provider?: 'claude' | 'zai'; // Provider (defaults to 'claude' if not specified)
+  model: ModelType;            // 'haiku' | 'sonnet' | 'opus' or 'glm-4.7', 'glm-4.5-air'
   thinkingLevel: ThinkingLevel;
 }
 

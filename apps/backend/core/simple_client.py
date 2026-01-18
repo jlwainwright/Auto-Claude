@@ -86,10 +86,15 @@ def create_simple_client(
         thinking_level = get_default_thinking_level(agent_type)
         max_thinking_tokens = get_thinking_budget(thinking_level)
 
+    # Debug: Show which provider is being used
+    import os
+    print(f"[DEBUG] create_simple_client: provider_id={provider_id}, is_claude={is_claude_provider(provider_id)}")
+    print(f"[DEBUG] create_simple_client: model={model}, agent_type={agent_type}")
+
     if is_claude_provider(provider_id):
+        print(f"[DEBUG] Using Claude SDK (native provider)")
         # Get authentication
         oauth_token = require_auth_token()
-        import os
 
         os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
 
@@ -108,7 +113,9 @@ def create_simple_client(
             )
         )
 
+    print(f"[DEBUG] Using OpenAI-compatible provider")
     provider_cfg = get_openai_compat_config(provider_id)
+    print(f"[DEBUG] Provider config: provider={provider_cfg.provider}, base_url={provider_cfg.base_url}, api_key_set={bool(provider_cfg.api_key)}")
     resolved_cwd = cwd.resolve() if cwd else Path.cwd().resolve()
     return OpenAICompatClient(
         model=model,
